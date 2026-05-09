@@ -25,8 +25,6 @@ class Config:
     port: int = 18931
     save_screenshots: bool = False
     screenshot_dir: str = str(Path(__file__).resolve().parent.parent / "screenshots")
-    # Auto-login config name (credentials encrypted in accounts/<config>.json)
-    account_config: str = "enikk"
 
     @classmethod
     def from_yaml(cls, path: str) -> "Config":

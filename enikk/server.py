@@ -19,22 +19,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger("enikk")
 
 
-class ReadyMiddleware(BaseHTTPMiddleware):
-    """Block requests while daemon is in launch+connect sequence."""
-    _EXEMPT = {"/health", "/api/state", "/api/action/launch", "/api/action/exit"}
-
-    async def dispatch(self, request: Request, call_next):
-        if request.url.path not in self._EXEMPT:
-            # Check if daemon has captured at least once
-            if not getattr(daemon, '_latest_state', None):
-                return Response(
-                    content=json.dumps({"error": "daemon not ready — waiting for game launch"}),
-                    status_code=503,
-                    media_type="application/json",
-                )
-        return await call_next(request)
-
-
 class TimingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         start = time.time()
@@ -54,7 +38,6 @@ def create_app(daemon: "Daemon") -> FastAPI:
     state = {"_launching": False}
 
     app.add_middleware(TimingMiddleware)
-    app.add_middleware(ReadyMiddleware)
 
     # ── Health ──
     @app.get("/health")
@@ -99,7 +82,10 @@ def create_app(daemon: "Daemon") -> FastAPI:
         """Get latest captured screenshot."""
         frame = daemon.capture.capture()
         if frame is None:
-            raise HTTPException(404, "No screenshot available")
+            raise HTTPException(500, {
+                "error": "capture_failed",
+                "message": "Game window not found — is the game running and in the foreground?",
+            })
 
         ext = ".jpg" if format == "jpeg" else ".png"
         encode_args = [cv2.IMWRITE_JPEG_QUALITY, quality] if format == "jpeg" else []
@@ -111,7 +97,10 @@ def create_app(daemon: "Daemon") -> FastAPI:
         """Get raw screenshot as base64."""
         frame = daemon.capture.capture()
         if frame is None:
-            raise HTTPException(404, "No screenshot available")
+            raise HTTPException(500, {
+                "error": "capture_failed",
+                "message": "Game window not found — is the game running and in the foreground?",
+            })
         _, buf = cv2.imencode(".png", frame)
         b64 = base64.b64encode(buf.tobytes()).decode()
         state = _state_to_dict(daemon.analyze(frame))
@@ -161,34 +150,10 @@ def create_app(daemon: "Daemon") -> FastAPI:
         thread.start()
         return {"success": True, "message": "Launch started"}
 
-    @app.post("/api/action/screenshot")
-    def trigger_screenshot():
-        """Force a single screenshot capture + analyze."""
-        frame = daemon.capture.capture()
-        if frame is None:
-            raise HTTPException(404, "Capture failed")
-        analysis = _state_to_dict(daemon.analyze(frame))
-        return {"success": True, "state": analysis}
-
-    @app.post("/api/action/confirm")
-    def action_confirm():
-        """OCR find '确认' and click."""
-        return daemon.action_confirm()
-
-    @app.post("/api/action/connect")
-    def action_connect():
-        """OCR find '点击连接' and click."""
-        return daemon.action_connect()
-
     @app.post("/api/action/click")
     def action_click(x: int = Query(), y: int = Query()):
         """Click at screen coordinates."""
         return daemon.action_click(x, y)
-
-    @app.post("/api/action/esc")
-    def action_esc():
-        """Send ESC key."""
-        return daemon.action_esc()
 
     @app.post("/api/action/exit")
     def action_exit():
@@ -209,11 +174,7 @@ def create_app(daemon: "Daemon") -> FastAPI:
                 "GET /api/screenshot/raw": "Raw screenshot base64",
                 "GET /api/process": "Game process info",
                 "POST /api/action/launch": "Launch game",
-                "POST /api/action/screenshot": "Force capture + analyze",
-                "POST /api/action/confirm": "OCR click '确认'",
-                "POST /api/action/connect": "OCR click '点击连接'",
                 "POST /api/action/click": "Click at (x, y)",
-                "POST /api/action/esc": "Send ESC key",
                 "POST /api/action/exit": "Terminate game",
             },
         }

@@ -101,11 +101,21 @@ class CaptureMethod:
     def capture(self) -> np.ndarray | None:
         """Capture screenshot of game window region."""
         hwnd = self.hwnd
-        if not hwnd:
+        if hwnd is None:
+            logger.error(
+                "Game window not found — class='%s', path='%s'. "
+                "Is the game running and in the foreground?",
+                self.window_class, self.process_path,
+            )
             return None
         try:
             region = self._get_window_region(hwnd)
             if region is None:
+                left, top, right, bottom = win32gui.GetWindowRect(hwnd)
+                logger.error(
+                    "Window found but has no client area — hwnd=%d, rect=%dx%d",
+                    hwnd, right - left, bottom - top,
+                )
                 return None
             left, top, width, height = region
 
@@ -114,5 +124,5 @@ class CaptureMethod:
             image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
             return image
         except Exception as e:
-            logger.error(f"Capture failed: {e}")
+            logger.error("Capture failed for hwnd=%d: %s", hwnd, e, exc_info=True)
             return None

@@ -1,5 +1,6 @@
 """Game process management — launcher login and game launch orchestration."""
 import ctypes
+import getpass
 import logging
 import os
 import subprocess
@@ -7,11 +8,8 @@ import time
 from dataclasses import dataclass
 
 import psutil
-
-from .account import load_account
-from .capture import CaptureMethod
-from .input import Input
-from .login import LauncherLogin
+import win32gui
+import win32process
 
 logger = logging.getLogger("enikk")
 
@@ -41,7 +39,6 @@ class _Process:
         try:
             system_username = os.getlogin()
         except Exception:
-            import getpass
             system_username = getpass.getuser()
 
         for proc in psutil.process_iter(['pid', 'name', 'username']):
@@ -60,7 +57,6 @@ class _Process:
         try:
             system_username = os.getlogin()
         except Exception:
-            import getpass
             system_username = getpass.getuser()
 
         for proc in psutil.process_iter(['pid', 'name', 'username']):
@@ -102,7 +98,6 @@ class _Process:
         try:
             system_username = os.getlogin()
         except Exception:
-            import getpass
             system_username = getpass.getuser()
 
         for proc in psutil.process_iter(['pid', 'name', 'username']):
@@ -121,8 +116,6 @@ class _Process:
 
     def switch_to(self) -> bool:
         """Switch the window to foreground."""
-        import win32gui
-        import win32process
 
         self.hwnd = 0
 
@@ -191,31 +184,6 @@ class LauncherProcess(_Process):
     def __init__(self, launcher_path: str, launcher_process: str):
         super().__init__("Launcher", "TWINCONTROL", launcher_process, launcher_path)
 
-    def login(self, config: object, stop_event=None) -> bool:
-        """Run OCR-based auto-login via launcher."""
-        stop_event_check = stop_event
-        if stop_event_check and stop_event_check.is_set():
-            logger.info("Login skipped — stop requested")
-            return False
-
-        cap = CaptureMethod("TWINCONTROL", self.path)
-        inp = Input()
-        config_name = getattr(config, 'account_config', 'enikk') if config else 'enikk'
-
-        account, password = load_account(config_name)
-        if not account or not password:
-            logger.warning(f"No account found for config '{config_name}', skipping login")
-            return False
-
-        login_flow = LauncherLogin(cap, inp)
-        if login_flow.login(stop_event_check):
-            logger.info("Login flow completed successfully")
-            return True
-        else:
-            logger.warning("Login flow failed, continuing anyway...")
-            return False
-
-
 class GameProcess(_Process):
     """Manages the NIKKE game process."""
 
@@ -265,7 +233,6 @@ class ProcessManager:
         try:
             system_username = os.getlogin()
         except Exception:
-            import getpass
             system_username = getpass.getuser()
 
         for proc in psutil.process_iter(['pid', 'name', 'username']):
@@ -281,14 +248,11 @@ class ProcessManager:
 
     # ── Main launch flow ──────
 
-    def app_start(self, config: object = None, skip_login: bool = False,
-                  stop_event: object = None) -> bool:
+    def app_start(self, stop_event: object = None) -> bool:
         """
-        Full launch flow: Launcher → Login → Game.
+        Full launch flow: Launcher → Game.
 
         Args:
-            config: Config object for auto-login settings.
-            skip_login: If True, skip the OCR auto-login step.
             stop_event: threading.Event to signal early termination.
         """
         logger.info("Game starting")
@@ -327,18 +291,14 @@ class ProcessManager:
 
                 logger.info("Launcher opened successfully")
 
-                # Step 4: Login (skip if auto-login is enabled)
-                if not skip_login:
-                    self.launcher.login(config, stop_event)
-
-                # Step 5: Wait for game process to appear
+                # Step 4: Wait for game process to appear
                 logger.info("Waiting for game process...")
                 if not self._wait_until(self.game.is_running, timeout=60):
                     self._last_error = "Timeout waiting for game process"
                     logger.error("Timeout waiting for game process")
                     continue
 
-                # Step 6: Switch to game window
+                # Step 5: Switch to game window
                 if not self._wait_until(self.game.switch_to, timeout=60):
                     self._last_error = "Timeout switching to game window"
                     logger.error("Timeout switching to game window")
