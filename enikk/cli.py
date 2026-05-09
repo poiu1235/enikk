@@ -139,7 +139,8 @@ def cmd_agent(args):
         model=args.model,
         enabled_toolsets=["enikk", "memory", "todo"],
         quiet_mode=False,
-        ephemeral_system_prompt=system_prompt,
+        save_trajectories=True,
+        system_message=system_prompt,
     )
 
     # Manually initialize MemoryStore so the memory tool works outside standard Hermes config
@@ -170,7 +171,8 @@ def cmd_agent(args):
             model=args.model,
             enabled_toolsets=["memory"],
             quiet_mode=False,
-            ephemeral_system_prompt=REVIEW_SYSTEM_PROMPT,
+            save_trajectories=True,
+            system_message=REVIEW_SYSTEM_PROMPT,
         )
         # Share the same MemoryStore so review writes to the same memory files
         review_agent._memory_store = agent._memory_store
