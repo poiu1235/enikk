@@ -4,20 +4,40 @@ import time
 import numpy as np
 import pyautogui
 from pynput.mouse import Button, Controller
+import win32gui
 
 
 class Input:
     """Mouse and keyboard input — foreground operation."""
 
-    def __init__(self):
+    def __init__(self, hwnd: int | None = None):
         self.mouse = Controller()
+        self._hwnd = hwnd
+
+    def set_hwnd(self, hwnd: int | None):
+        """Set the target window handle for activation before click."""
+        self._hwnd = hwnd
+
+    def _activate_window(self):
+        """Bring window to foreground if not active."""
+        if not self._hwnd:
+            return
+        try:
+            foreground = win32gui.GetForegroundWindow()
+            if foreground != self._hwnd:
+                win32gui.SetForegroundWindow(self._hwnd)
+                time.sleep(0.05)
+        except Exception:
+            pass
 
     def mouse_click(self, x, y):
         """Click at screen coordinates."""
-        pyautogui.click(x, y)
+        # self._activate_window()
+        pyautogui.click(x, y, duration=0.3)
 
     def mouse_down(self, x, y):
         """Press mouse button at coordinates."""
+        # self._activate_window()
         pyautogui.mouseDown(x, y)
 
     def mouse_up(self):

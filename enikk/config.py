@@ -25,6 +25,7 @@ class Config:
     port: int = 18931
     save_screenshots: bool = False
     screenshot_dir: str = str(Path(__file__).resolve().parent.parent / "screenshots")
+    weights_dir: str = str(Path(__file__).resolve().parent.parent / "weights")
 
     @classmethod
     def from_yaml(cls, path: str) -> "Config":

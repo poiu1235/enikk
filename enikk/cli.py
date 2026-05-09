@@ -1,5 +1,6 @@
 """Enikk CLI — single entrypoint for daemon, screenshot, and click commands."""
 import argparse
+import base64
 import io
 import json
 import logging
@@ -9,8 +10,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 from urllib.error import URLError
-from urllib.parse import urljoin, quote
-from urllib.request import urlopen, urlretrieve
+from urllib.parse import urljoin
+from urllib.request import Request, urlopen
 
 from .config import Config
 from .daemon import Daemon
@@ -77,10 +78,13 @@ def cmd_daemon(args):
 # ── Client commands ───────────────────────────────────────────────────
 
 def cmd_screenshot(args):
-    fmt = args.format or "jpeg"
-    ext = "jpg" if fmt == "jpeg" else "png"
-    save_dir_param = getattr(args, "save_dir", "") or ""
-    width_param = getattr(args, "width", "") or ""
+    url = urljoin(build_url(args.server), "/api/screenshot")
+    req = Request(url, method="GET")
+    resp = urlopen(req, timeout=120)
+    data = json.loads(resp.read())
+
+    # Save image
+    ext = data.get("format", "jpeg")
     if args.output:
         out = args.output
     else:
@@ -88,11 +92,15 @@ def cmd_screenshot(args):
         save_dir.mkdir(exist_ok=True)
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         out = str(save_dir / f"{ts}.{ext}")
-    qs = f"format={fmt}&debug={args.debug}&save_dir={quote(save_dir_param)}"
-    if width_param:
-        qs += f"&width={width_param}"
-    urlretrieve(urljoin(build_url(args.server), f"/api/screenshot?{qs}"), out)
-    print(f"Screenshot saved to {out}")
+
+    img_bytes = base64.b64decode(data["image_b64"])
+    with open(out, "wb") as f:
+        f.write(img_bytes)
+
+    # Print structured data with saved file path
+    output = {k: v for k, v in data.items() if k != "image_b64"}
+    output["path"] = out
+    print(json.dumps(output, indent=2, ensure_ascii=False))
 
 
 def cmd_click(args):
@@ -121,17 +129,13 @@ def main():
     daemon_p.add_argument("--port", type=int, help="API port")
     daemon_p.set_defaults(func=cmd_daemon)
 
-    screenshot_p = sub.add_parser("screenshot", help="Download latest screenshot")
-    screenshot_p.add_argument("-f", "--format", choices=["jpeg", "png"], default="jpeg")
+    screenshot_p = sub.add_parser("screenshot", help="Download structured screenshot (base64 + OCR + YOLO)")
     screenshot_p.add_argument("-o", "--output", help="Output file path")
-    screenshot_p.add_argument("-d", "--save-dir", help="Directory to save screenshot")
-    screenshot_p.add_argument("--debug", action="store_true", help="Add debug overlay")
-    screenshot_p.add_argument("-w", "--width", type=int, help="Resize width")
     screenshot_p.set_defaults(func=cmd_screenshot)
 
-    click_p = sub.add_parser("click", help="Click at screen coordinates")
-    click_p.add_argument("x", type=int, help="Screen X")
-    click_p.add_argument("y", type=int, help="Screen Y")
+    click_p = sub.add_parser("click", help="Click at normalized bbox center")
+    click_p.add_argument("x", type=int, help="Normalized X (0-1000)")
+    click_p.add_argument("y", type=int, help="Normalized Y (0-1000)")
     click_p.set_defaults(func=cmd_click)
 
     args = parser.parse_args()

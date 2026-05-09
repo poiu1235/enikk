@@ -19,6 +19,12 @@ dependencies = [
     "pyautogui>=0.9",
     "pynput>=1.7",
     "cryptography>=41.0",
+    "ultralytics>=8.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
 ]
 
 [project.scripts]

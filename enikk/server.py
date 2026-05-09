@@ -1,6 +1,5 @@
 """FastAPI HTTP server for Enikk."""
 import asyncio
-import base64
 import json
 import logging
 import threading
@@ -8,10 +7,8 @@ import time
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from typing import TYPE_CHECKING
-
-import cv2
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import StreamingResponse
 
 if TYPE_CHECKING:
     from .daemon import Daemon
@@ -74,12 +71,8 @@ def create_app(daemon: "Daemon") -> FastAPI:
 
     # ── Screenshot ──
     @app.get("/api/screenshot")
-    def get_screenshot(
-        quality: int = Query(85, ge=1, le=100),
-        format: str = Query("jpeg", pattern="^(jpeg|png)$"),
-        debug: bool = Query(False),
-    ):
-        """Get latest captured screenshot."""
+    def get_screenshot():
+        """Compress screenshot, run UI parser, return base64 + structured data."""
         frame = daemon.capture.capture()
         if frame is None:
             raise HTTPException(500, {
@@ -87,24 +80,8 @@ def create_app(daemon: "Daemon") -> FastAPI:
                 "message": "Game window not found — is the game running and in the foreground?",
             })
 
-        ext = ".jpg" if format == "jpeg" else ".png"
-        encode_args = [cv2.IMWRITE_JPEG_QUALITY, quality] if format == "jpeg" else []
-        _, buf = cv2.imencode(f".{ext.replace('.', '')}", frame, encode_args)
-        return Response(buf.tobytes(), media_type=f"image/{ext.replace('.', '')}")
-
-    @app.get("/api/screenshot/raw")
-    def get_screenshot_raw():
-        """Get raw screenshot as base64."""
-        frame = daemon.capture.capture()
-        if frame is None:
-            raise HTTPException(500, {
-                "error": "capture_failed",
-                "message": "Game window not found — is the game running and in the foreground?",
-            })
-        _, buf = cv2.imencode(".png", frame)
-        b64 = base64.b64encode(buf.tobytes()).decode()
-        state = _state_to_dict(daemon.analyze(frame))
-        return {"image": b64, "format": "png", "width": frame.shape[1], "height": frame.shape[0], "state": state}
+        state = daemon.analyze(frame)
+        return {**_state_to_dict(state), "format": "jpeg"}
 
     # ── Process Info ──
     @app.get("/api/process")
@@ -150,9 +127,9 @@ def create_app(daemon: "Daemon") -> FastAPI:
         thread.start()
         return {"success": True, "message": "Launch started"}
 
-    @app.post("/api/action/click")
+    @app.get("/api/action/click")
     def action_click(x: int = Query(), y: int = Query()):
-        """Click at screen coordinates."""
+        """Click at normalized [0, 1000] coordinates."""
         return daemon.action_click(x, y)
 
     @app.post("/api/action/exit")
@@ -170,8 +147,7 @@ def create_app(daemon: "Daemon") -> FastAPI:
                 "GET /health": "Health check",
                 "GET /api/state": "Current game state",
                 "GET /api/state/stream": "SSE state stream",
-                "GET /api/screenshot": "Latest screenshot (JPEG)",
-                "GET /api/screenshot/raw": "Raw screenshot base64",
+                "GET /api/screenshot": "Screenshot base64 + OCR + YOLO UI elements",
                 "GET /api/process": "Game process info",
                 "POST /api/action/launch": "Launch game",
                 "POST /api/action/click": "Click at (x, y)",

@@ -1,13 +1,21 @@
 """Enikk daemon — game state capture, analysis, and actions."""
+import base64
 import logging
 import threading
 import time
 
+import cv2
+import numpy as np
+
 from . import capture, process
 from .config import Config
-from . import analyzer, input as input_mod
+from . import analyzer
+from . import input as input_mod
+from .ui_parser import UIParser
 
 logger = logging.getLogger("enikk")
+
+COMPRESS_SIZE = (1366, 768)
 
 
 class Daemon:
@@ -22,8 +30,8 @@ class Daemon:
             timeout=config.launch_timeout,
         )
         self.capture = capture.CaptureMethod(config.window_class, config.game_path)
-        self.analyzer = analyzer.GameAnalyzer(config.assets_dir) if hasattr(config, 'assets_dir') else analyzer.GameAnalyzer()
-        self.input = input_mod.Input()
+        self.input = input_mod.Input(hwnd=self.capture.hwnd)
+        self.ui_parser = UIParser(getattr(config, 'weights_dir', None))
         self._latest_state: analyzer.GameState | None = None
         self._lock = threading.Lock()
         self.stop_event = threading.Event()
@@ -42,20 +50,24 @@ class Daemon:
         """Full launch flow: Launcher → Login → Game."""
         return self.proc_mgr.app_start(stop_event=self.stop_event)
 
-    def analyze(self) -> analyzer.GameState:
-        """Capture + analyze current game state."""
-        frame = self.capture.capture()
-        if frame is None:
-            state = analyzer.GameState(
-                game_state="not_running",
-                state_reason="capture_failed",
-                actions=["launch_game"],
-                timestamp=time.strftime("%Y-%m-%dT%H:%M:%S"),
-            )
-            self._latest_state = state
-            return state
+    def analyze(self, frame: np.ndarray | None = None) -> analyzer.GameState:
+        """Capture screenshot, compress, run UI parser, return structured state."""
+        compressed = cv2.resize(frame, COMPRESS_SIZE)
+        _, buf = cv2.imencode(".jpeg", compressed)
+        image_b64 = base64.b64encode(buf.tobytes()).decode()
 
-        state = self.analyzer.analyze(frame)
+        parsed = self.ui_parser.parse(frame)
+
+        bbox_desc = "All element bbox coordinates are normalized to [0, 1000] as [x1, y1, x2, y2], where (x1,y1) is top-left and (x2,y2) is bottom-right, as percentages of screen width and height."
+
+        state = analyzer.GameState(
+            image_b64=image_b64,
+            width=compressed.shape[1],
+            height=compressed.shape[0],
+            ocr=parsed,
+            bbox_desc=bbox_desc,
+            timestamp=time.strftime("%Y-%m-%dT%H:%M:%S"),
+        )
         with self._lock:
             self._latest_state = state
         return state
@@ -63,12 +75,20 @@ class Daemon:
     # ── Actions ──
 
     def action_click(self, x: int, y: int) -> dict:
-        """Click at screen coordinates."""
-        self.input.mouse_click(x, y)
-        return {"success": True, "x": x, "y": y}
+        """Click at normalized [0, 1000] coordinates."""
+        off_x, off_y, w, h = 0, 0, COMPRESS_SIZE[0], COMPRESS_SIZE[1]
+        region = self.capture.get_region()
+        if region:
+            off_x, off_y, w, h = region
+        self.input.set_hwnd(self.capture.hwnd)
+        abs_x = off_x + int(x / 1000 * w)
+        abs_y = off_y + int(y / 1000 * h)
+        self.input.mouse_click(abs_x, abs_y)
+        return {"success": True, "x": abs_x, "y": abs_y}
 
     def action_exit(self) -> dict:
         """Force-terminate the game process."""
         result = self.proc_mgr.game.stop()
         self._latest_state = None
+        self.input.set_hwnd(None)
         return {"success": result, "message": "Game terminated" if result else "Failed"}
