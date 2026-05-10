@@ -35,11 +35,13 @@ class Input:
     def mouse_click(self, x, y):
         """Click at screen coordinates."""
         self._activate_window()
-        pyautogui.click(x, y, duration=0.3)
+        time.sleep(0.2)
+        pyautogui.click(x, y, duration=0.6)
 
     def mouse_down(self, x, y):
         """Press mouse button at coordinates."""
         self._activate_window()
+        time.sleep(0.2)
         pyautogui.mouseDown(x, y)
 
     def mouse_up(self):
