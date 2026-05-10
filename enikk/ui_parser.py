@@ -10,7 +10,7 @@ from ultralytics import YOLO
 
 logger = logging.getLogger("enikk")
 
-TARGET_SIZE = (1366, 768)  # (width, height)
+MAX_DIM = 1366
 
 
 def _box_area(box):
@@ -43,7 +43,7 @@ class UIParser:
     """Pre-loads YOLO + OCR models, parses compressed screenshots."""
 
     def __init__(self, weights_dir: str = None):
-        self.target_size = TARGET_SIZE
+        self.max_dim = MAX_DIM
         self.ocr = RapidOCR(use_angle_cls=False)
         self.yolo: YOLO | None = None
 
@@ -60,9 +60,12 @@ class UIParser:
             logger.info("No weights_dir provided, YOLO icon detection disabled")
 
     def _compress(self, image: np.ndarray) -> tuple[np.ndarray, tuple]:
-        """Resize image to target size, return (resized, (orig_h, orig_w))."""
+        """Resize image so max dimension <= MAX_DIM, preserving aspect ratio. Returns (resized, (orig_h, orig_w))."""
         h, w = image.shape[:2]
-        resized = cv2.resize(image, self.target_size)
+        if w <= self.max_dim and h <= self.max_dim:
+            return image, (h, w)
+        scale = self.max_dim / max(w, h)
+        resized = cv2.resize(image, (int(w * scale), int(h * scale)))
         return resized, (h, w)
 
     def _detect_icons(self, resized: np.ndarray) -> list[dict]:

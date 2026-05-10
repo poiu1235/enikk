@@ -27,6 +27,11 @@ class Config:
     screenshot_dir: str = str(Path(__file__).resolve().parent.parent / "screenshots")
     weights_dir: str = str(Path(__file__).resolve().parent.parent / "weights")
 
+    # Agent defaults
+    agent_model: str = "qwen3.6-plus"
+    agent_base_url: str = ""
+    agent_api_key: str = ""
+
     @classmethod
     def from_yaml(cls, path: str) -> "Config":
         with open(path, encoding="utf-8") as f:

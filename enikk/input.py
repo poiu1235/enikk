@@ -6,6 +6,8 @@ import pyautogui
 from pynput.mouse import Button, Controller
 import win32gui
 
+from .capture import force_foreground
+
 
 class Input:
     """Mouse and keyboard input — foreground operation."""
@@ -19,25 +21,25 @@ class Input:
         self._hwnd = hwnd
 
     def _activate_window(self):
-        """Bring window to foreground if not active."""
+        """Force window to foreground."""
         if not self._hwnd:
             return
         try:
             foreground = win32gui.GetForegroundWindow()
             if foreground != self._hwnd:
-                win32gui.SetForegroundWindow(self._hwnd)
+                force_foreground(self._hwnd)
                 time.sleep(0.05)
         except Exception:
             pass
 
     def mouse_click(self, x, y):
         """Click at screen coordinates."""
-        # self._activate_window()
+        self._activate_window()
         pyautogui.click(x, y, duration=0.3)
 
     def mouse_down(self, x, y):
         """Press mouse button at coordinates."""
-        # self._activate_window()
+        self._activate_window()
         pyautogui.mouseDown(x, y)
 
     def mouse_up(self):

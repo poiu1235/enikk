@@ -11,11 +11,9 @@ from . import capture, process
 from .config import Config
 from . import analyzer
 from . import input as input_mod
-from .ui_parser import UIParser
+from .ui_parser import MAX_DIM, UIParser
 
 logger = logging.getLogger("enikk")
-
-COMPRESS_SIZE = (1366, 768)
 
 
 class Daemon:
@@ -52,7 +50,12 @@ class Daemon:
 
     def analyze(self, frame: np.ndarray | None = None) -> analyzer.GameState:
         """Capture screenshot, compress, run UI parser, return structured state."""
-        compressed = cv2.resize(frame, COMPRESS_SIZE)
+        h, w = frame.shape[:2]
+        if w > MAX_DIM or h > MAX_DIM:
+            scale = MAX_DIM / max(w, h)
+            compressed = cv2.resize(frame, (int(w * scale), int(h * scale)))
+        else:
+            compressed = frame
         _, buf = cv2.imencode(".jpeg", compressed)
         image_b64 = base64.b64encode(buf.tobytes()).decode()
 
@@ -76,10 +79,10 @@ class Daemon:
 
     def action_click(self, x: int, y: int) -> dict:
         """Click at normalized [0, 1000] coordinates."""
-        off_x, off_y, w, h = 0, 0, COMPRESS_SIZE[0], COMPRESS_SIZE[1]
         region = self.capture.get_region()
-        if region:
-            off_x, off_y, w, h = region
+        if not region:
+            return {"success": False, "error": "Game window region not available"}
+        off_x, off_y, w, h = region
         self.input.set_hwnd(self.capture.hwnd)
         abs_x = off_x + int(x / 1000 * w)
         abs_y = off_y + int(y / 1000 * h)
