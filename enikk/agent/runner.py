@@ -70,7 +70,7 @@ class AgentRunner:
                 enabled_toolsets=["memory"],
                 quiet_mode=False,
                 save_trajectories=False,
-                max_iterations=8,
+                max_iterations=20,
             )
             review_agent._memory_store = self.agent._memory_store
             review_agent._memory_enabled = True
@@ -82,7 +82,7 @@ class AgentRunner:
                 "Review this session. Update memory using the memory tool to add lessons, "
                 "remove outdated entries, or consolidate duplicates. "
                 "Keep only actionable insights that will make future sessions smoother. "
-                "If nothing meaningful was learned, skip memory writes."
+                "If nothing meaningful was learned, skip memory update."
             )
 
             review_result = review_agent.run_conversation(

@@ -6,7 +6,7 @@ import pyautogui
 from pynput.mouse import Button, Controller
 import win32gui
 
-from .capture import force_foreground
+from .window_utils import force_foreground
 
 
 class Input:
