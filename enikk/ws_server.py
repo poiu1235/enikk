@@ -71,11 +71,11 @@ class WsServer:
         try:
             req = json.loads(raw)
         except json.JSONDecodeError:
-            await websocket.send_json({
+            await websocket.send(json.dumps({
                 "jsonrpc": "2.0",
                 "error": {"code": -32700, "message": "Parse error"},
                 "id": None,
-            })
+            }))
             return
 
         method = req.get("method")
@@ -89,11 +89,11 @@ class WsServer:
         logger.info(f"[ws] {method} -> {elapsed:.0f}ms")
 
         if req_id is not None:
-            await websocket.send_json({
+            await websocket.send(json.dumps({
                 "jsonrpc": "2.0",
                 "result": result,
                 "id": req_id,
-            })
+            }))
 
     async def _route(self, method: str, params: dict, websocket):
         """Route a JSON-RPC method call."""

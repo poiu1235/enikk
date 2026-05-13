@@ -11,31 +11,26 @@
 
 ### 📋 Web Dashboard（嵌入式 SPA）
 
-**状态**：已决定技术栈，待启动
+**状态**：✅ 后端完成，✅ 前端骨架完成，待联调
 
-**技术选型**：
-- 前端：Vue 3 SFC + Vite + TypeScript
-- 组件库：Naive UI（轻量、TS 原生）
-- 状态管理：Pinia
-- 后端：FastAPI（复用 Enikk server）
-- 通信：WebSocket JSON-RPC（参考 OpenClaw Control UI 架构）
+**已完成**：
+- [x] ws_server.py: WebSocket JSON-RPC 服务器
+- [x] agent/manager.py: AgentManager 生命周期管理（start/abort/history）
+- [x] agent/hermes_tools.py: InternalToolContext（直接调 daemon，不走 HTTP）
+- [x] daemon.py: 整合 AgentManager + WsServer
+- [x] cli.py: ws-daemon 命令
+- [x] config.py: ws_port 字段
+- [x] frontend/: Vue 3 + Vite + TS + Naive UI 脚手架
+- [x] frontend/ws-client.ts: WebSocket JSON-RPC 客户端
+- [x] frontend/stores/chat.ts: Pinia 聊天状态管理
+- [x] frontend/components/ChatPanel.vue: 聊天界面（消息列表 + 输入框 + 中断按钮）
+- [x] Build 通过（229KB gzipped）
 
-**目标**：
-- 替代 Hermes Dashboard 的 PTY hack 方案
-- 原生 Web Chat UI（非终端模拟器）
-- 嵌入 FastAPI 静态文件服务
-- 支持聊天、配置、会话历史
-
-**架构参考**：
-- OpenClaw Control UI：Vite + Lit，WebSocket JSON-RPC，单一端口
-- 改进：Vue SFC 替代 Lit（coding agent 更友好、组件生态丰富）
-
-**下一步**：
-1. 搭脚手架（Vue 3 + Vite + TS）
-2. WebSocket JSON-RPC 客户端
-3. 聊天界面骨架（消息列表 + 输入框）
-4. FastAPI WS 端点
-5. session.history 集成
+**待做**：
+- [ ] 集成 FastAPI 静态文件服务（build 产物）
+- [ ] 联调测试（ws-daemon + 前端）
+- [ ] session.history 集成
+- [ ] 截图预览功能
 
 ### 🔍 OmniParser UI 增强
 
