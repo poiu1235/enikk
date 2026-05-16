@@ -6,6 +6,7 @@ import base64
 import logging
 import threading
 import time
+import uuid
 
 import cv2
 import numpy as np
@@ -140,6 +141,12 @@ class Daemon:
     @rpc("ping")
     def _ping(self, rid, params):
         return "pong"
+
+    @rpc("connect")
+    def _connect(self, rid, params):
+        session_id = uuid.uuid4().hex[:12]
+        logger.info("[ws] Client authenticated: %s (role=%s)", session_id, params.get("role", "unknown"))
+        return {"ok": True, "session_id": session_id, "protocol": 1, "tick_interval_ms": 30000}
 
     @rpc("session.list")
     def _session_list(self, rid, params):

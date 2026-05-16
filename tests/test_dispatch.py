@@ -6,13 +6,14 @@ class TestRpcRegistry:
     def test_known_methods_registered(self):
         methods = list(_rpc_registry)
         assert "ping" in methods
+        assert "connect" in methods
         assert "session.run" in methods
         assert "session.stop" in methods
         assert "session.status" in methods
         assert "session.list" in methods
 
     def test_handlers_are_callable(self):
-        for method in ("ping", "session.run", "session.list"):
+        for method in ("ping", "connect", "session.run", "session.list"):
             assert callable(_rpc_registry[method]), f"{method} not callable"
 
 
@@ -28,6 +29,14 @@ class TestDispatch:
         assert resp["jsonrpc"] == "2.0"
         assert resp["id"] == "1"
         assert resp["result"] == "pong"
+
+    def test_connect(self, daemon):
+        resp = daemon.dispatch({"method": "connect", "id": "1",
+                                 "params": {"role": "dashboard", "client": {"id": "cli"}}})
+        assert resp["result"]["ok"] is True
+        assert len(resp["result"]["session_id"]) == 12
+        assert resp["result"]["protocol"] == 1
+        assert resp["result"]["tick_interval_ms"] == 30000
 
     def test_session_list(self, daemon):
         resp = daemon.dispatch({"method": "session.list", "id": "2"})

@@ -220,6 +220,14 @@ def cmd_ws_status(args):
     print(json.dumps(resp, indent=2, ensure_ascii=False))
 
 
+def cmd_ws_connect(args):
+    resp = _ws_request(args.server, {
+        "jsonrpc": "2.0", "id": "1", "method": "connect",
+        "params": {"role": args.role, "client": {"id": "cli", "version": "1.0"}},
+    })
+    print(json.dumps(resp, indent=2, ensure_ascii=False))
+
+
 # ── Main entrypoint ───────────────────────────────────────────────────
 
 def main():
@@ -260,6 +268,10 @@ def main():
     ws_status = sub.add_parser("ws-status", help="Query session status via WebSocket")
     ws_status.add_argument("game", type=str, help="Game ID (e.g., nikke)")
     ws_status.set_defaults(func=cmd_ws_status)
+
+    ws_connect = sub.add_parser("ws-connect", help="Send connect handshake via WebSocket")
+    ws_connect.add_argument("--role", type=str, default="dashboard", help="Client role")
+    ws_connect.set_defaults(func=cmd_ws_connect)
 
     screenshot_p = sub.add_parser("screenshot", help="Download structured screenshot (base64 + OCR + YOLO)")
     screenshot_p.add_argument("-o", "--output", help="Output file path")
