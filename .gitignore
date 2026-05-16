@@ -19,3 +19,4 @@ SOUL.md
 view.py
 uv.lock
 failed_trajectories.jsonl
+.claude/settings.local.json
