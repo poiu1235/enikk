@@ -228,6 +228,22 @@ def cmd_ws_connect(args):
     print(json.dumps(resp, indent=2, ensure_ascii=False))
 
 
+# ── TUI command ──────────────────────────────────────────────────────
+
+def cmd_tui(args):
+    """Launch the Textual TUI dashboard."""
+    from .tui.app import EnikkTui
+
+    host = args.server
+    for prefix in ("ws://", "wss://"):
+        if host.startswith(prefix):
+            host = host[len(prefix):]
+    host = host.rsplit(":", 1)[0]
+
+    app = EnikkTui(server=host, port=args.ws_port)
+    app.run()
+
+
 # ── Main entrypoint ───────────────────────────────────────────────────
 
 def main():
@@ -281,6 +297,10 @@ def main():
     click_p.add_argument("x", type=int, help="Normalized X (0-1000)")
     click_p.add_argument("y", type=int, help="Normalized Y (0-1000)")
     click_p.set_defaults(func=cmd_click)
+
+    tui_p = sub.add_parser("tui", help="Launch Textual TUI dashboard")
+    tui_p.add_argument("--ws-port", type=int, default=18932, help="WebSocket port")
+    tui_p.set_defaults(func=cmd_tui)
 
     args = parser.parse_args()
     if not args.command:

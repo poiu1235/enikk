@@ -22,6 +22,7 @@ dependencies = [
     "cryptography>=41.0",
     "ultralytics>=8.0",
     "hermes-agent @ git+https://github.com/NousResearch/hermes-agent.git@v2026.5.7",
+    "textual>=2.0",
 ]
 
 [project.optional-dependencies]

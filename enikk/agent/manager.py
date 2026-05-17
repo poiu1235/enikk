@@ -138,7 +138,7 @@ class AgentManager:
             dead = set()
             for ws in self._ws_clients:
                 try:
-                    await ws.send_json(event)
+                    await ws.send(json.dumps(event))
                 except Exception:
                     dead.add(ws)
             self._ws_clients -= dead

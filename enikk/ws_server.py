@@ -9,7 +9,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import Protocol, runtime_checkable
+from collections.abc import Callable, Coroutine
+from typing import Any, Protocol, runtime_checkable
 
 import websockets
 from websockets import ServerConnection
@@ -45,11 +46,15 @@ class WsServer:
         dispatcher: Dispatcher,
         host: str = "127.0.0.1",
         port: int = 18932,
+        on_connect: Callable[[ServerConnection], Coroutine[Any, Any, None]] | None = None,
+        on_disconnect: Callable[[ServerConnection], Coroutine[Any, Any, None]] | None = None,
     ) -> None:
         self._dispatcher = dispatcher
         self._host = host
         self._port = port
         self._server = None
+        self._on_connect = on_connect
+        self._on_disconnect = on_disconnect
 
     async def serve_forever(self) -> None:
         """Start the WebSocket server and block until cancelled."""
@@ -80,6 +85,9 @@ class WsServer:
             },
         }))
 
+        if self._on_connect:
+            await self._on_connect(ws)
+
         try:
             async for raw in ws:
                 line = raw.strip() if isinstance(raw, str) else ""
@@ -102,6 +110,8 @@ class WsServer:
         except Exception:
             logger.debug("[ws] Connection error: %s", remote, exc_info=True)
         finally:
+            if self._on_disconnect:
+                await self._on_disconnect(ws)
             logger.info("[ws] Client disconnected: %s", remote)
 
     def shutdown(self) -> None:

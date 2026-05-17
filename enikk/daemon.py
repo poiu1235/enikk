@@ -10,6 +10,7 @@ import uuid
 
 import cv2
 import numpy as np
+from websockets import ServerConnection
 
 from . import capture, process
 from .config import Config
@@ -55,6 +56,7 @@ class Daemon:
         self._ws_server: WsServer | None = None
         self._agent_manager: AgentManager | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
+        self._ws_clients: set[ServerConnection] = set()
 
     def stop(self):
         """Signal the daemon to stop."""
@@ -168,8 +170,23 @@ class Daemon:
         """Start WebSocket server and Agent manager (blocking)."""
         self._loop = loop
         self._agent_manager = AgentManager(self, loop)
+        self._agent_manager._ws_clients = self._ws_clients
         ws_port = getattr(self.config, 'ws_port', 18932)
-        self._ws_server = WsServer(dispatcher=self, port=ws_port)
+
+        async def _on_connect(ws: ServerConnection):
+            self._ws_clients.add(ws)
+            logger.info("[ws] Client registered (%d total)", len(self._ws_clients))
+
+        async def _on_disconnect(ws: ServerConnection):
+            self._ws_clients.discard(ws)
+            logger.info("[ws] Client unregistered (%d total)", len(self._ws_clients))
+
+        self._ws_server = WsServer(
+            dispatcher=self,
+            port=ws_port,
+            on_connect=_on_connect,
+            on_disconnect=_on_disconnect,
+        )
 
         try:
             loop.run_until_complete(self._ws_server.serve_forever())
