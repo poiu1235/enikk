@@ -11,7 +11,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 if TYPE_CHECKING:
-    from .daemon import Daemon
+    from .runtime import GameRuntime
 
 logger = logging.getLogger("enikk")
 
@@ -25,7 +25,7 @@ class TimingMiddleware(BaseHTTPMiddleware):
         return response
 
 
-def create_app(daemon: "Daemon") -> FastAPI:
+def create_app(daemon: "GameRuntime") -> FastAPI:
     app = FastAPI(
         title="Enikk API",
         description="NIKKE 游戏状态监控 | NIKKE: Goddess of Victory Game State Monitor",
@@ -73,25 +73,24 @@ def create_app(daemon: "Daemon") -> FastAPI:
     @app.get("/api/screenshot")
     def get_screenshot():
         """Compress screenshot, run UI parser, return base64 + structured data."""
-        frame = daemon.capture.capture()
-        if frame is None:
+        try:
+            state = daemon.analyze()
+        except ValueError:
             raise HTTPException(500, {
                 "error": "capture_failed",
                 "message": "Game window not found — is the game running and in the foreground?",
             })
-
-        state = daemon.analyze(frame)
         return {**_state_to_dict(state), "format": "jpeg"}
 
     # ── Process Info ──
     @app.get("/api/process")
     def get_process_info():
         pm = daemon.proc_mgr
-        proc = pm.get_process(pm.game_process)
+        proc = pm.game.get_process()
         info = {
             "is_running": pm.is_game_running,
-            "exe_path": pm.game_path,
-            "window_class": pm.window_class,
+            "exe_path": daemon.profile.exe_path,
+            "window_class": daemon.profile.game_window_class,
         }
         if pm.is_game_running and proc:
             try:

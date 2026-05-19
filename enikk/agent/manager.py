@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from ..daemon import Daemon
+    from ..runtime import GameRuntime
 
 logger = logging.getLogger("enikk")
 
@@ -17,7 +17,7 @@ logger = logging.getLogger("enikk")
 class AgentManager:
     """Manages embedded agent sessions with WebSocket event broadcasting."""
 
-    def __init__(self, daemon: "Daemon", loop: asyncio.AbstractEventLoop):
+    def __init__(self, daemon: "GameRuntime", loop: asyncio.AbstractEventLoop):
         self.daemon = daemon
         self._loop = loop
         self._stop_events: dict[str, threading.Event] = {}

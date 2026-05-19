@@ -17,7 +17,7 @@ from urllib.request import Request, urlopen
 import websockets
 
 from .config import Config
-from .daemon import Daemon
+from .runtime import GameRuntime
 from .server import create_app
 import uvicorn
 
@@ -60,7 +60,7 @@ def cmd_ws_daemon(args):
         cfg.ws_port = args.ws_port
         logger.info(f"WebSocket port overridden: {args.ws_port}")
 
-    daemon = Daemon(cfg)
+    daemon = GameRuntime(cfg)
 
     if sys.platform == 'win32':
         def handler(sig, frame):
@@ -107,7 +107,7 @@ def cmd_daemon(args):
     if args.port:
         cfg.port = args.port
 
-    daemon = Daemon(cfg)
+    daemon = GameRuntime(cfg)
 
     if sys.platform == 'win32':
         def handler(sig, frame):

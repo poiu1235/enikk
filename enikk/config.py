@@ -20,6 +20,7 @@ class Config:
     game_path: str = r"C:\Program Files\NIKKE\NIKKE.exe"
     client_type: str = "intl"  # intl or hmt
     window_class: str = WINDOW_CLASS
+    launcher_window_class: str = LAUNCHER_CLASS
     window_title: str = "NIKKE"
     launch_timeout: int = 120
     host: str = "127.0.0.1"
