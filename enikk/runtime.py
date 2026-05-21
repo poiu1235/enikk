@@ -1,41 +1,23 @@
 """Enikk game runtime orchestration."""
 from __future__ import annotations
 
-import asyncio
 import base64
 import logging
 import threading
 import time
-import uuid
-from collections.abc import Callable
 
 import cv2
 import numpy as np
-from websockets import ServerConnection
 
 from . import analyzer
-from .agent.manager import AgentManager
 from .config import Config, GameConfig
 from .game import capture, input as input_mod, process, window
 from .runtimes.nikke import nikke_profile_from_config
 from .runtimes.profile import GameProfile
 from .ui_parser import MAX_DIM, UIParser
-from .ws_server import WsServer
 
 logger = logging.getLogger(__name__)
 DEFAULT_MAX_DIM = 1366
-
-_rpc_registry: dict[str, Callable[..., object]] = {}
-
-
-def rpc(method: str):
-    """Decorator: register a GameRuntime method as JSON-RPC handler."""
-
-    def decorator(fn):
-        _rpc_registry[method] = fn
-        return fn
-
-    return decorator
 
 
 def profile_from_config(config: Config) -> GameProfile:
@@ -66,16 +48,6 @@ class GameRuntime:
         self._latest_state: analyzer.GameState | None = None
         self._lock = threading.Lock()
         self.stop_event = threading.Event()
-
-        # Compatibility attributes for older call sites.
-        self.proc_mgr = self.process_manager
-        self.capture = self.capture_service
-        self.input = self.input_service
-
-        self._ws_server: WsServer | None = None
-        self._agent_manager: AgentManager | None = None
-        self._loop: asyncio.AbstractEventLoop | None = None
-        self._ws_clients: set[ServerConnection] = set()
 
     def stop(self):
         logger.info("Stop requested, shutting down...")
@@ -221,91 +193,6 @@ class GameRuntime:
         self.game_hwnd = None
         return {"success": result, "message": "Game terminated" if result else "Failed"}
 
-    def dispatch(self, req: dict) -> dict:
-        rid = req.get("id")
-        method = req.get("method", "")
-        params = req.get("params", {}) or {}
-
-        fn = _rpc_registry.get(method)
-        if fn is None:
-            return {
-                "jsonrpc": "2.0",
-                "id": rid,
-                "error": {"code": -32601, "message": f"unknown method: {method}"},
-            }
-
-        try:
-            result = fn(self, rid, params)
-            return {"jsonrpc": "2.0", "id": rid, "result": result}
-        except Exception as exc:
-            return {
-                "jsonrpc": "2.0",
-                "id": rid,
-                "error": {"code": -32000, "message": str(exc)},
-            }
-
-    @rpc("ping")
-    def _ping(self, rid, params):
-        return "pong"
-
-    @rpc("connect")
-    def _connect(self, rid, params):
-        session_id = uuid.uuid4().hex[:12]
-        logger.info("[ws] Client authenticated: %s (role=%s)", session_id, params.get("role", "unknown"))
-        return {"ok": True, "session_id": session_id, "protocol": 1, "tick_interval_ms": 30000}
-
-    @rpc("session.list")
-    def _session_list(self, rid, params):
-        return {"agents": []}
-
-    @rpc("session.status")
-    def _session_status(self, rid, params):
-        return {"status": "idle"}
-
-    @rpc("session.run")
-    def _session_run(self, rid, params):
-        return {"run_id": "stub", "status": "accepted"}
-
-    @rpc("session.stop")
-    def _session_stop(self, rid, params):
-        return {"status": "stopped"}
-
-    def start_ws(self, loop: asyncio.AbstractEventLoop):
-        self._loop = loop
-        self._agent_manager = AgentManager(self, loop)
-        self._agent_manager._ws_clients = self._ws_clients  # type: ignore[attr-defined]
-        ws_port = self.config.server.ws_port
-
-        async def _on_connect(ws: ServerConnection):
-            self._ws_clients.add(ws)
-            logger.info("[ws] Client registered (%d total)", len(self._ws_clients))
-
-        async def _on_disconnect(ws: ServerConnection):
-            self._ws_clients.discard(ws)
-            logger.info("[ws] Client unregistered (%d total)", len(self._ws_clients))
-
-        self._ws_server = WsServer(
-            dispatcher=self,
-            port=ws_port,
-            on_connect=_on_connect,
-            on_disconnect=_on_disconnect,
-        )
-
-        try:
-            loop.run_until_complete(self._ws_server.serve_forever())
-        except KeyboardInterrupt:
-            logger.info("Interrupted, shutting down...")
-        finally:
-            self.shutdown()
-
     def shutdown(self):
         self.stop_event.set()
-        if self._agent_manager:
-            self._agent_manager.shutdown()
-        if self._ws_server:
-            self._ws_server.shutdown()
         logger.info("Runtime shut down")
-
-
-# Compatibility alias while callers migrate from daemon.Daemon.
-Daemon = GameRuntime

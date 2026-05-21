@@ -85,7 +85,7 @@ def create_app(daemon: "GameRuntime") -> FastAPI:
     # ── Process Info ──
     @app.get("/api/process")
     def get_process_info():
-        pm = daemon.proc_mgr
+        pm = daemon.process_manager
         proc = pm.game.get_process()
         info = {
             "is_running": pm.is_game_running,
@@ -107,7 +107,7 @@ def create_app(daemon: "GameRuntime") -> FastAPI:
         """Launch the game asynchronously."""
         if state["_launching"]:
             return {"success": False, "message": "Launch already in progress"}
-        if daemon.proc_mgr.is_game_running:
+        if daemon.process_manager.is_game_running:
             return {"success": False, "message": "Game already running"}
 
         state["_launching"] = True
@@ -118,7 +118,7 @@ def create_app(daemon: "GameRuntime") -> FastAPI:
                 if result:
                     logger.info("Game launched successfully")
                 else:
-                    logger.error(f"Game launch failed: {daemon.proc_mgr.last_error or 'unknown'}")
+                    logger.error(f"Game launch failed: {daemon.process_manager.last_error or 'unknown'}")
             finally:
                 state["_launching"] = False
 

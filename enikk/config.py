@@ -32,7 +32,6 @@ class GameConfig:
 class ServerConfig:
     host: str = "127.0.0.1"
     port: int = 18931  # HTTP API
-    ws_port: int = 18932  # WebSocket
 
 
 @dataclass
