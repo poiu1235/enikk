@@ -80,7 +80,7 @@ class InputService:
 
     def swipe_screen(self, p1, p2, speed: float = 1.0):
         """Natural swipe using pynput with linear interpolation."""
-        distance = np.linalg.norm(np.array(p2) - np.array(p1))
+        distance: float = float(np.linalg.norm(np.array(p2, dtype=float) - np.array(p1, dtype=float)))
         segments = max(int(distance / 20), 5)
         total_time = max(0.05, min(distance / (100 * speed), 0.15))
         step_delay = total_time / segments

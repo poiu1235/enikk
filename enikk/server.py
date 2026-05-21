@@ -136,24 +136,6 @@ def create_app(daemon: "GameRuntime") -> FastAPI:
         """Terminate game process."""
         return daemon.action_exit()
 
-    # ── API Info ──
-    @app.get("/api/info")
-    def api_info():
-        return {
-            "name": "Enikk API",
-            "version": "0.1.0",
-            "endpoints": {
-                "GET /health": "Health check",
-                "GET /api/state": "Current game state",
-                "GET /api/state/stream": "SSE state stream",
-                "GET /api/screenshot": "Screenshot base64 + OCR + YOLO UI elements",
-                "GET /api/process": "Game process info",
-                "POST /api/action/launch": "Launch game",
-                "POST /api/action/click": "Click at (x, y)",
-                "POST /api/action/exit": "Terminate game",
-            },
-        }
-
     return app
 
 
