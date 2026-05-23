@@ -66,6 +66,7 @@ class TestWorkspaceConfig:
         assert "screenshots" in wc.screenshot_dir
         assert "weights" in wc.weights_dir
         assert wc.save_screenshots is False
+        assert wc.screenshot_max_dim == 1366
 
 
 # ── from_yaml ────────────────────────────────────────────────────────

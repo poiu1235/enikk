@@ -47,6 +47,7 @@ class WorkspaceConfig:
     screenshot_dir: str = str(Path(__file__).resolve().parent.parent / "screenshots")
     weights_dir: str = str(Path(__file__).resolve().parent.parent / "weights")
     save_screenshots: bool = False
+    screenshot_max_dim: int = 1366
 
 
 @dataclass

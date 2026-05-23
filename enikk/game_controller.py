@@ -13,7 +13,7 @@ from tools.registry import registry, tool_result
 
 from .config import Config, GameConfig
 from .game import capture, input as input_mod, process, window
-from .ui_parser import MAX_DIM, UIParser
+from .ui_parser import UIParser
 
 
 logger = logging.getLogger(__name__)
@@ -33,8 +33,7 @@ class GameController:
         self.window = window.WindowService()
         self.capture = capture.CaptureService(self.window)
         self.input = input_mod.InputService(self.window)
-        self.max_dim = MAX_DIM
-        self.ui_parser = UIParser(config.workspace.weights_dir)
+        self.ui_parser = UIParser(config.workspace.weights_dir, screenshot_max_dim=config.workspace.screenshot_max_dim)
         self._screenshot_dir = Path(config.workspace.screenshot_dir)
         self._processes: dict[str, process.GameProcessManager] = {}
 
@@ -88,8 +87,9 @@ class GameController:
             return {"error": "Capture failed"}
 
         h, w = frame.shape[:2]
-        if w > self.max_dim or h > self.max_dim:
-            scale = self.max_dim / max(w, h)
+        max_dim = self.config.workspace.screenshot_max_dim
+        if w > max_dim or h > max_dim:
+            scale = max_dim / max(w, h)
             compressed = cv2.resize(frame, (int(w * scale), int(h * scale)))
         else:
             compressed = frame
@@ -109,6 +109,8 @@ class GameController:
             "width": compressed.shape[1],
             "height": compressed.shape[0],
             "ui_elements": parsed,
+            "image_path": path,
+            "SoM_image_path": bbox_path,
             "bbox_desc": (
                 "All element bbox coordinates are normalized to [0, 1000] as "
                 "[x1, y1, x2, y2], where (x1,y1) is top-left and (x2,y2) is "
@@ -116,7 +118,6 @@ class GameController:
                 "already pre-computed — use center directly for click coordinates."
             ),
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
-            "image_path": path,
         }
 
     def read_image(self, path: str) -> dict:
@@ -234,7 +235,7 @@ class GameController:
                     "properties": {},
                 },
             },
-            handler=lambda _args, **kw: tool_result(self.list_games()),
+            handler=lambda args, **kw: tool_result(self.list_games()),
         )
 
         registry.register(
@@ -412,7 +413,7 @@ class GameController:
             handler=lambda args, **kw: tool_result(self.stop(game=args["game"])),
         )
 
-        logger.info("Registered %d game_controller tools in hermes registry", 10)
+    # ── Private helpers ─────────────────────────────────────────────────
 
     def _save_bbox_overlay(self, image, elements: list, path: str) -> None:
         """Draw normalized [0,1000] bboxes onto image and save to path."""
@@ -426,11 +427,9 @@ class GameController:
             cv2.rectangle(overlay, (px1, py1), (px2, py2), color, 1)
             label = el.get("text") or el.get("label", "")
             if label:
-                cv2.putText(overlay, label[:30], (px1, max(py1 - 4, 12 )),
+                cv2.putText(overlay, label[:30], (px1, max(py1 - 4, 12)),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
         cv2.imwrite(path, overlay)
-
-    # ── Private helpers ─────────────────────────────────────────────────
 
     def _force_foreground(self, hwnd: int) -> bool:
         return self.window.force_foreground(hwnd)
