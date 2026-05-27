@@ -8,7 +8,6 @@ import queue
 import threading
 import uuid
 from dataclasses import dataclass, field
-from pathlib import Path
 from urllib.parse import quote
 
 import run_agent
@@ -101,11 +100,8 @@ class Eternity:
 
     def setup(self) -> None:
         """One-time init: create SessionDB, GameController, register tools."""
-        enikk_home = Path.home() / ".enikk"
-        logger.info("Enikk home: %s", enikk_home)
-        db_path = enikk_home / "sessions.db"
-        self._session_db = SessionDB(db_path)
-        logger.info("SessionDB at %s", db_path)
+        self._session_db = SessionDB()
+        logger.info("SessionDB at %s", self._session_db.db_path)
 
         self._controller = GameController(self.config)
         if not self._registered:
