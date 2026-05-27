@@ -450,20 +450,25 @@
         style="height:28px;"
       ></textarea>
 
-      <div class="flex items-center justify-end mt-2.5">
+      <div class="flex items-center justify-end mt-2.5 gap-2">
 
-        <!-- Send / Stop -->
+        <!-- Stop button (only when running) -->
         <button
-          @click="isTyping ? stopTyping() : sendMessage()"
+          x-show="isTyping"
+          @click="stopTyping()"
+          class="send-btn w-9 h-9 rounded-full flex items-center justify-center cursor-pointer transition-all bg-gray-700 text-white hover:bg-gray-800"
+          title="Stop">
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+        </button>
+
+        <!-- Send button (always visible) -->
+        <button
+          @click="sendMessage()"
           class="send-btn w-9 h-9 rounded-full flex items-center justify-center cursor-pointer transition-all"
-          :class="isTyping ? 'bg-gray-700 text-white' : (inputText.trim() ? 'bg-accent text-white' : 'bg-gray-200 text-gray-400')"
-          :disabled="!isTyping && !inputText.trim()">
-          <template x-if="!isTyping">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
-          </template>
-          <template x-if="isTyping">
-            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
-          </template>
+          :class="inputText.trim() ? 'bg-accent text-white' : 'bg-gray-200 text-gray-400'"
+          :disabled="!inputText.trim()"
+          title="Send">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
         </button>
       </div>
     </div>
@@ -748,10 +753,49 @@ function chatApp() {
 
     async sendMessage() {
       const text = this.inputText.trim();
-      if (!text || this.isTyping) return;
+      if (!text) return;
 
       this.inputText = '';
       this.$nextTick(() => this.autoResize(this.$refs.inputRef));
+
+      // If agent is running, just steer it (don't create new stream)
+      if (this.isTyping && this.activeSessionId) {
+        const session = this.sessions.find(s => s.id === this.activeSessionId);
+        if (!session) return;
+
+        // Freeze current streaming message and push to session.messages
+        // so user steer appears in the right chronological position
+        if (this._streamingMsg && this._streamingMsg.parts.length > 0) {
+          const frozen = { ...this._streamingMsg, _streaming: false };
+          session.messages.push(frozen);
+          this._streamingMsg = { role: 'assistant', content: '', images: [], parts: [], _streaming: true };
+        }
+
+        // Push user message immediately for responsive UX
+        session.messages.push({ role: 'user', content: text, images: [] });
+        this.$nextTick(() => this.scrollToBottom());
+
+        try {
+          const resp = await fetch(`/api/sessions/${session.id}/steer`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: text })
+          });
+          if (!resp.ok) {
+            const error = await resp.json().catch(() => ({ detail: 'Unknown error' }));
+            throw new Error(error.detail || 'HTTP ' + resp.status);
+          }
+        } catch (e) {
+          console.error('Failed to steer:', e);
+          session.messages.push({
+            role: 'assistant',
+            content: `**Error:** ${e.message}`,
+            images: []
+          });
+          this.$nextTick(() => this.scrollToBottom());
+        }
+        return;
+      }
 
       let session;
       let userMsgPushed = false;
@@ -820,7 +864,6 @@ function chatApp() {
       this.isTyping = true;
 
       // Create streaming assistant message as separate Alpine property
-      // (avoids Alpine Proxy issues when mutating parts array)
       this._streamingMsg = { role: 'assistant', content: '', images: [], parts: [], _streaming: true };
 
       this.startStream(session);
