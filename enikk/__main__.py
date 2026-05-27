@@ -11,11 +11,11 @@ _enikk_home = Path.home() / ".enikk"
 _enikk_home.mkdir(parents=True, exist_ok=True)
 os.environ["HERMES_HOME"] = str(_enikk_home)
 
-import uvicorn
+import uvicorn  # noqa: E402
 
-from .config import Config
-from .eternity import Eternity
-from .server import create_app
+from .config import Config  # noqa: E402
+from .eternity import Eternity  # noqa: E402
+from .server import create_app  # noqa: E402
 
 
 logger = logging.getLogger(__name__)
