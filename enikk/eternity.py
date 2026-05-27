@@ -52,7 +52,7 @@ class StreamChannel:
     subscribers: list[queue.Queue] = field(default_factory=list)
 
     def subscribe(self) -> queue.Queue:
-        q = queue.Queue()
+        q: queue.Queue = queue.Queue()
         with self._lock:
             self.subscribers.append(q)
         logger.debug("StreamChannel subscribed (%d subscribers)", len(self.subscribers))
@@ -146,14 +146,18 @@ class Eternity:
         def _log_publish(event: str, data: dict) -> None:
             logger.debug("SSE publish [%s] %s", event, json.dumps(data, default=str)[:200])
 
+        def _publish(event: str, data: dict) -> None:
+            """Log and publish an SSE event."""
+            _log_publish(event, data)
+            handle.publish(event, data)
+
         def _publish_tool_result(tc_id: str, name: str, result) -> None:
             """Publish tool_result event, enriching with imageUrl if result contains image path."""
             data = {"call_id": tc_id, "name": name, "result": result}
             img_url = _extract_image_url(result)
             if img_url:
                 data["imageUrl"] = img_url
-            _log_publish("tool_result", data)
-            handle.publish("tool_result", data)
+            _publish("tool_result", data)
 
         mc = self.config.model
         agent = run_agent.AIAgent(
@@ -167,12 +171,10 @@ class Eternity:
             max_iterations=max_iterations,
             session_id=session_id,
             session_db=self._session_db,
-            tool_start_callback=lambda tc_id, name, args: _log_publish("tool_call", {"call_id": tc_id, "name": name, "args": args}) or handle.publish("tool_call", {"call_id": tc_id, "name": name, "args": args}),
+            tool_start_callback=lambda tc_id, name, args: _publish("tool_call", {"call_id": tc_id, "name": name, "args": args}),
             tool_complete_callback=lambda tc_id, name, _args, result: _publish_tool_result(tc_id, name, result),
-            stream_delta_callback=lambda delta: (
-                delta is not None and (_log_publish("delta", {"text": delta}), handle.publish("delta", {"text": delta}))
-            ),
-            reasoning_callback=lambda text: _log_publish("reasoning", {"text": text}) or handle.publish("reasoning", {"text": text}),
+            stream_delta_callback=lambda delta: _publish("delta", {"text": delta}) if delta is not None else None,
+            reasoning_callback=lambda text: _publish("reasoning", {"text": text}),
         )
 
         handle.agent = agent
