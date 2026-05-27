@@ -371,7 +371,7 @@
                         </div>
                         <div x-show="part.type === 'context'" class="context-badge my-1 text-xs text-gray-400 flex items-center gap-1">
                           <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-                          <span>Step <span x-text="part.step"></span>: <span x-text="part.current.toLocaleString()"></span> / <span x-text="part.limit.toLocaleString()"></span> (<span x-text="part.pct"></span>%)</span>
+                          <span>Step <span x-text="part.step"></span>: <span x-text="(part.current || 0).toLocaleString()"></span> / <span x-text="(part.limit || 0).toLocaleString()"></span> (<span x-text="part.pct"></span>%)</span>
                         </div>
                         <div x-show="part.type === 'content'" class="msg-content" x-html="renderMarkdown(part.content)"></div>
                       </div>
