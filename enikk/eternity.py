@@ -189,19 +189,32 @@ class Eternity:
                 task, system_message=system_message, conversation_history=history,
             )
             handle.result = result
-            handle.publish("session", {"status": "completed"})
+            handle.publish("session", {"status": "completed", **self._get_token_usage(handle.session_id)})
         except InterruptedError:
             logger.info("Session %s interrupted", handle.session_id)
             handle.result = {"status": "interrupted"}
-            handle.publish("session", {"status": "stopped"})
+            handle.publish("session", {"status": "stopped", **self._get_token_usage(handle.session_id)})
         except Exception:
             logger.exception("Session %s failed", handle.session_id)
             handle.result = {"error": "agent exception"}
-            handle.publish("session", {"status": "error"})
+            handle.publish("session", {"status": "error", **self._get_token_usage(handle.session_id)})
             handle.publish("error", {"message": "agent exception"})
         finally:
             logger.info("Session %s finished", handle.session_id)
             handle.stream.close()
+
+    def _get_token_usage(self, session_id: str) -> dict:
+        """Read token usage stats from SessionDB for a session."""
+        s = self._session_db.get_session(session_id)
+        if not s:
+            return {}
+        return {
+            "input_tokens": s.get("input_tokens", 0),
+            "output_tokens": s.get("output_tokens", 0),
+            "cache_read_tokens": s.get("cache_read_tokens", 0),
+            "cache_write_tokens": s.get("cache_write_tokens", 0),
+            "estimated_cost_usd": s.get("estimated_cost_usd"),
+        }
 
     def list_sessions(self, limit: int = 20, offset: int = 0) -> list[dict]:
         """List sessions from SessionDB, ordered by last activity."""
