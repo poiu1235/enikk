@@ -149,7 +149,7 @@ class Eternity:
             api_key=mc.api_key or None,
             model=model or mc.default,
             max_tokens=mc.max_tokens,
-            enabled_toolsets=[GameController.TOOLSET],
+            enabled_toolsets=[GameController.TOOLSET, "skills"],
             quiet_mode=False,
             save_trajectories=False,
             max_iterations=max_iterations,
