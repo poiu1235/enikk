@@ -56,6 +56,7 @@ class Config:
     server: ServerConfig = field(default_factory=ServerConfig)
     model: ModelConfig = field(default_factory=ModelConfig)
     workspace: WorkspaceConfig = field(default_factory=WorkspaceConfig)
+    log_level: str = "DEBUG"
 
     # ── Helpers ───────────────────────────────────────────────────────
 
@@ -103,4 +104,6 @@ class Config:
                 k: v for k, v in wd.items()
                 if k in {f.name for f in fields(WorkspaceConfig)}
             })
+        if "log_level" in data:
+            cfg.log_level = data["log_level"]
         return cfg
