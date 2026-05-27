@@ -69,7 +69,6 @@ class StreamChannel:
             subs = list(self.subscribers)
         for q in subs:
             q.put(event)
-        logger.debug("StreamChannel published %s to %d subscribers", event.get("event", "?"), len(subs))
 
     def close(self):
         with self._lock:
@@ -143,12 +142,10 @@ class Eternity:
         # Create handle first so callbacks can reference stream
         handle = SessionHandle(session_id=session_id, thread=None, agent=None)  # type: ignore[arg-type]
 
-        def _log_publish(event: str, data: dict) -> None:
-            logger.debug("SSE publish [%s] %s", event, json.dumps(data, default=str)[:200])
-
         def _publish(event: str, data: dict) -> None:
-            """Log and publish an SSE event."""
-            _log_publish(event, data)
+            """Publish an SSE event, logging only important events."""
+            if event in ("tool_call", "tool_result", "session"):
+                logger.debug("SSE [%s/%s] %s", session_id, event, json.dumps(data, default=str)[:200])
             handle.publish(event, data)
 
         def _publish_tool_result(tc_id: str, name: str, result) -> None:
@@ -332,7 +329,6 @@ class Eternity:
                 if event is None:
                     logger.info("SSE stream closed for session %s", session_id)
                     break
-                logger.debug("SSE stream yielding %s", event.get("event", "?"))
                 yield event
         finally:
             handle.stream.unsubscribe(q)

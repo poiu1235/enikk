@@ -84,11 +84,8 @@ def create_app(eternity: Eternity) -> FastAPI:
     @app.get("/api/sessions/{session_id}/stream")
     async def stream_session(session_id: str):
         async def event_generator():
-            count = 0
             try:
                 async for event in eternity.get_session_stream(session_id):
-                    count += 1
-                    logger.debug("SSE send [%d/%s] %s", count, session_id, event.get("event", "?"))
                     yield f"data: {json.dumps(event)}\n\n"
             except Exception as e:
                 logger.error(f"Stream error for session {session_id}: {e}")
