@@ -77,15 +77,20 @@ class GameController:
 
     def analyze(self, game: str, target: str = "game") -> dict:
         """Capture window, run OCR + YOLO, return structured state."""
+        t0 = time.time()
+        logger.debug("analyze(game=%s, target=%s) start", game, target)
+
         if target == "launcher":
             hwnd = self.find_launcher_window(game)
         else:
             hwnd = self.find_game_window(game)
         if hwnd is None:
+            logger.debug("analyze: %s window not found", target)
             return {"error": f"{target} window not found for '{game}'"}
 
         frame = self.capture.capture(hwnd)
         if frame is None:
+            logger.debug("analyze: capture failed")
             return {"error": "Capture failed"}
 
         h, w = frame.shape[:2]
@@ -103,9 +108,13 @@ class GameController:
         cv2.imwrite(path, compressed)
 
         parsed = self.ui_parser.parse(frame)
+        logger.debug("analyze: found %d ui_elements", len(parsed))
 
         bbox_path = str(date_dir / f"{game}_{ts}_bbox.jpeg")
         self._save_bbox_overlay(compressed, parsed, bbox_path)
+
+        elapsed = time.time() - t0
+        logger.debug("analyze: done in %.2fs", elapsed)
 
         return {
             "width": compressed.shape[1],
@@ -144,28 +153,45 @@ class GameController:
 
     def click(self, x: int, y: int, game: str, target: str = "game") -> dict:
         """Click at normalized [0, 1000] coordinates."""
+        t0 = time.time()
+        logger.debug("click(x=%d, y=%d, game=%s, target=%s)", x, y, game, target)
+
         if target == "launcher":
             hwnd = self.find_launcher_window(game)
         else:
             hwnd = self.find_game_window(game)
         if hwnd is None:
+            logger.debug("click: %s window not found", target)
             return {"success": False, "error": f"{target} window not found for '{game}'"}
-        return self.input.click_normalized(hwnd, x, y)
+
+        result = self.input.click_normalized(hwnd, x, y)
+        elapsed = time.time() - t0
+        logger.debug("click: done in %.2fs, success=%s", elapsed, result.get("success"))
+        return result
 
     def launch(self, game: str) -> dict:
         """Start the launcher and wait for its window."""
+        t0 = time.time()
+        logger.debug("launch(game=%s) start", game)
+
         if self.is_game_running(game):
+            logger.debug("launch: %s already running", game)
             return {"status": "already_running", "message": f"{game} is already running"}
 
         if not self.is_launcher_running(game):
+            logger.debug("launch: starting launcher for %s", game)
             if not self._start_launcher(game):
+                logger.debug("launch: failed to start launcher")
                 return {"status": "error", "message": "Failed to start launcher"}
 
         hwnd = self._wait_for_launcher_window(game, timeout=30)
         if hwnd is None:
+            logger.debug("launch: launcher window not found within 30s")
             return {"status": "error", "message": "Launcher window not found"}
 
         self._force_foreground(hwnd)
+        elapsed = time.time() - t0
+        logger.debug("launch: launcher ready in %.2fs", elapsed)
         return {
             "status": "launcher_ready",
             "message": "Launcher is ready. Use analyze() to find Start Game button, click it, then wait_for_game().",
@@ -173,29 +199,41 @@ class GameController:
 
     def wait_for_game(self, game: str) -> dict:
         """Wait for the game process and window after clicking Start Game in launcher."""
+        t0 = time.time()
+        logger.debug("wait_for_game(game=%s) start", game)
+
         if not self._wait_for_game_process(game, timeout=120):
+            logger.debug("wait_for_game: process timeout")
             return {"status": "timeout", "message": "Game process did not start"}
 
         hwnd = self._wait_for_game_window(game, timeout=60)
         if hwnd is None:
+            logger.debug("wait_for_game: window timeout")
             return {"status": "error", "message": "Game window not found"}
 
         self._force_foreground(hwnd)
         time.sleep(2)
+        elapsed = time.time() - t0
+        logger.debug("wait_for_game: ready in %.2fs", elapsed)
         return {"status": "game_ready", "message": "Game window is ready"}
 
     def wait(self, seconds: float) -> dict:
         """Wait for a duration."""
+        logger.debug("wait(%.1fs)", seconds)
         time.sleep(seconds)
+        logger.debug("wait: done")
         return {"status": "waited", "seconds": seconds}
 
     def stop(self, game: str) -> dict:
         """Stop both game and launcher processes."""
+        logger.debug("stop(game=%s)", game)
         pm = self._get_process(game)
-        return {
+        result = {
             "game_stopped": pm.stop_game(),
             "launcher_stopped": pm.stop_launcher(),
         }
+        logger.debug("stop: %s", result)
+        return result
 
     # ── Tool registration ───────────────────────────────────────────────
 
