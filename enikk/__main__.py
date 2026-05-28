@@ -49,7 +49,7 @@ def cmd_daemon(args):
     try:
         uvicorn.run(
             create_app(eternity), host=cfg.server.host, port=cfg.server.port,
-            log_level="info", timeout_graceful_shutdown=5,
+            log_level="info", timeout_graceful_shutdown=2,
         )
     except KeyboardInterrupt:
         logger.info("KeyboardInterrupt received")
