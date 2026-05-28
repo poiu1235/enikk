@@ -19,12 +19,12 @@ class InputService:
         self.window = window_service or window.WindowService()
         self.mouse = Controller()
 
-    def click_screen(self, x: int, y: int) -> dict:
+    def click_screen(self, x: int, y: int, clicks: int = 1) -> dict:
         """Click at absolute screen coordinates."""
-        pyautogui.click(x, y, duration=0.6)
-        return {"success": True, "x": x, "y": y}
+        pyautogui.click(x, y, clicks=clicks, duration=0.6)
+        return {"success": True, "x": x, "y": y, "clicks": clicks}
 
-    def click_window(self, hwnd: int, x: int, y: int, *, activate: bool = True) -> dict:
+    def click_window(self, hwnd: int, x: int, y: int, *, activate: bool = True, clicks: int = 1) -> dict:
         """Click at client-area coordinates relative to a window."""
         region = self.window.get_client_region(hwnd)
         if region is None:
@@ -35,9 +35,9 @@ class InputService:
         if activate:
             self.window.force_foreground(hwnd)
             time.sleep(0.2)
-        return self.click_screen(abs_x, abs_y)
+        return self.click_screen(abs_x, abs_y, clicks=clicks)
 
-    def click_normalized(self, hwnd: int, x: int, y: int, *, activate: bool = True) -> dict:
+    def click_normalized(self, hwnd: int, x: int, y: int, *, activate: bool = True, clicks: int = 1) -> dict:
         """Click at normalized [0, 1000] coordinates within a window client area."""
         if not self.window.is_valid(hwnd):
             return {"success": False, "error": "Invalid window handle"}
@@ -51,7 +51,7 @@ class InputService:
         if activate:
             self.window.force_foreground(hwnd)
             time.sleep(0.2)
-        return self.click_screen(abs_x, abs_y)
+        return self.click_screen(abs_x, abs_y, clicks=clicks)
 
     def mouse_down_window(self, hwnd: int, x: int, y: int, *, activate: bool = True) -> dict:
         """Press mouse button at client-area coordinates."""

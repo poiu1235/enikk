@@ -153,17 +153,17 @@ class AppController:
             ],
         }
 
-    def click(self, x: int, y: int, app: str, target: str = "app") -> dict:
-        """Click at normalized [0, 1000] coordinates."""
+    def click(self, x: int, y: int, app: str, target: str = "app", clicks: int = 1) -> dict:
+        """Click at normalized [0, 1000] coordinates. clicks=2 for double-click."""
         t0 = time.time()
-        logger.info("click(x=%d, y=%d, app=%s, target=%s)", x, y, app, target)
+        logger.info("click(x=%d, y=%d, app=%s, target=%s, clicks=%d)", x, y, app, target, clicks)
 
         hwnd = self._find_window(app, target)
         if hwnd is None:
             logger.info("click: %s window not found", target)
             return {"success": False, "error": f"{target} window not found for '{app}'"}
 
-        result = self.input.click_normalized(hwnd, x, y)
+        result = self.input.click_normalized(hwnd, x, y, clicks=clicks)
         elapsed = time.time() - t0
         logger.info("click: done in %.2fs, success=%s", elapsed, result.get("success"))
         return result
@@ -380,7 +380,7 @@ class AppController:
             name="click",
             toolset=AppController.TOOLSET,
             schema={
-                "description": "Click at normalized [0, 1000] coordinates on the app or launcher window. Coordinates are percentages of screen width/height where (0,0) is top-left and (1000,1000) is bottom-right.",
+                "description": "Click at normalized [0, 1000] coordinates on the app or launcher window. Coordinates are percentages of screen width/height where (0,0) is top-left and (1000,1000) is bottom-right. Set clicks=2 for double-click.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -401,12 +401,16 @@ class AppController:
                             "enum": ["app", "launcher"],
                             "description": "Which window to click on: 'app' (default) or 'launcher'.",
                         },
+                        "clicks": {
+                            "type": "integer",
+                            "description": "Number of clicks. Default 1, set to 2 for double-click.",
+                        },
                     },
                     "required": ["x", "y", "app", "target"],
                 },
             },
             handler=lambda args, **kw: tool_result(
-                self.click(x=args["x"], y=args["y"], app=args["app"], target=args.get("target", "app"))
+                self.click(x=args["x"], y=args["y"], app=args["app"], target=args.get("target", "app"), clicks=args.get("clicks", 1))
             ),
         )
 
