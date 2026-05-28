@@ -109,7 +109,7 @@ class GameController:
         logger.info("analyze: found %d ui_elements", len(parsed))
 
         bbox_path = str(date_dir / f"{game}_{ts}_bbox.jpeg")
-        self._save_bbox_overlay(compressed, parsed, bbox_path)
+        self._save_bbox_overlay(compressed, parsed, bbox_path, hwnd=hwnd, orig_size=(h, w))
 
         elapsed = time.time() - t0
         logger.info("analyze: done in %.2fs", elapsed)
@@ -558,7 +558,8 @@ class GameController:
             return self.find_launcher_window(game)
         return self.find_game_window(game)
 
-    def _save_bbox_overlay(self, image, elements: list, path: str) -> None:
+    def _save_bbox_overlay(self, image, elements: list, path: str, *,
+                           hwnd: int | None = None, orig_size: tuple[int, int] | None = None) -> None:
         """Draw normalized [0,1000] bboxes onto image and save to path."""
         from PIL import Image, ImageDraw, ImageFont
 
@@ -588,6 +589,27 @@ class GameController:
             if label:
                 text_y = max(py1 - 18, 0)
                 draw.text((px1, text_y), label[:30], fill=color, font=font)
+
+        # Draw mouse cursor position as red crosshair
+        if hwnd is not None and self.window.is_valid(hwnd):
+            try:
+                import win32gui
+                sx, sy = win32gui.GetCursorPos()
+                ox, oy = win32gui.ClientToScreen(hwnd, (0, 0))
+                # Cursor position relative to client area in original pixel coords
+                cx, cy = sx - ox, sy - oy
+                # Scale to compressed image coords
+                if orig_size is not None:
+                    oh, ow = orig_size
+                    cx = int(cx * w / ow)
+                    cy = int(cy * h / oh)
+                if 0 <= cx < w and 0 <= cy < h:
+                    cs = 10
+                    draw.line([(cx - cs, cy), (cx + cs, cy)], fill=(255, 0, 0), width=2)
+                    draw.line([(cx, cy - cs), (cx, cy + cs)], fill=(255, 0, 0), width=2)
+                    draw.ellipse([cx - 4, cy - 4, cx + 4, cy + 4], fill=(255, 0, 0))
+            except Exception:
+                pass
 
         # Convert back to BGR for cv2.imwrite
         overlay = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
