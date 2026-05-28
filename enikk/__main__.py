@@ -1,9 +1,11 @@
 """Enikk CLI — single entrypoint for daemon."""
 import argparse
+import asyncio
 import io
 import logging
 import os
 import sys
+import threading
 from pathlib import Path
 
 # Must be set BEFORE importing enikk modules (which import hermes at module level)
@@ -42,8 +44,30 @@ def cmd_daemon(args):
         force=True,
     )
 
+    for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
+        logging.getLogger(name).handlers.clear()
+
     eternity = Eternity(cfg)
     eternity.setup()
+
+    im_loop = None
+    im_thread = None
+    im_bridge = None
+    active = cfg.im and cfg.im.active_platform
+    if active:
+        from .im_bridge import IMBridge
+        im_loop = asyncio.new_event_loop()
+        im_bridge = IMBridge(cfg, eternity)
+
+        def _run_im():
+            asyncio.set_event_loop(im_loop)
+            im_loop.run_until_complete(im_bridge.start())
+            im_loop.run_forever()
+
+        im_thread = threading.Thread(target=_run_im, daemon=True, name="im-bridge")
+        im_thread.start()
+        platform_name, _ = active
+        logger.info("IM bridge started (%s)", platform_name)
 
     timeout = 2
     logger.info(f"Starting API server on {cfg.server.host}:{cfg.server.port}")
@@ -51,11 +75,24 @@ def cmd_daemon(args):
         uvicorn.run(
             create_app(eternity), host=cfg.server.host, port=cfg.server.port,
             log_level="info", timeout_graceful_shutdown=timeout,
+            log_config=None,
         )
     except KeyboardInterrupt:
         logger.info("KeyboardInterrupt received")
     finally:
         logger.info("Shutting down...")
+        if im_bridge and im_loop:
+            logger.info("Stopping IM bridge...")
+            future = asyncio.run_coroutine_threadsafe(im_bridge.stop(), im_loop)
+            try:
+                future.result(timeout=3.0)
+            except Exception:
+                logger.warning("IM bridge stop timed out")
+            im_loop.call_soon_threadsafe(im_loop.stop)
+            if im_thread:
+                im_thread.join(timeout=3.0)
+            im_loop.close()
+            logger.info("IM bridge stopped")
         eternity.shutdown(timeout=timeout)
         os._exit(0)
 
@@ -64,7 +101,7 @@ def cmd_daemon(args):
 
 def main():
     parser = argparse.ArgumentParser(
-        prog="enikk", description="Enikk: AI Agent for desktop automation."
+        prog="enikk", description="Enikk: Self-improving GUI Agent."
     )
     sub = parser.add_subparsers(dest="command")
 

@@ -70,7 +70,11 @@ class InputService:
         pyautogui.mouseUp()
 
     def mouse_move_screen(self, x: int, y: int):
-        pyautogui.moveTo(x, y)
+        """Move mouse with human-like duration and slight jitter."""
+        duration = random.uniform(0.3, 0.8)
+        jitter_x = random.randint(-2, 2)
+        jitter_y = random.randint(-2, 2)
+        pyautogui.moveTo(x + jitter_x, y + jitter_y, duration=duration, tween=pyautogui.easeInOutQuad)
 
     def press_key(self, key: str, wait_time: float = 0.2):
         pyautogui.keyDown(key)

@@ -340,14 +340,31 @@ class Eternity:
 
         q = handle.stream.subscribe()
         logger.info("SSE stream started for session %s", session_id)
-        loop = asyncio.get_event_loop()
         try:
             while True:
-                event = await loop.run_in_executor(None, q.get)
+                # Use asyncio.to_thread for non-blocking queue.get() with timeout
+                try:
+                    event = await asyncio.to_thread(q.get, timeout=5.0)
+                except queue.Empty:
+                    # No event for 5 seconds, check if session still running
+                    if not self.is_running(session_id):
+                        # Drain any remaining events
+                        while not q.empty():
+                            event = q.get_nowait()
+                            if event is not None:
+                                yield event
+                        logger.info("SSE stream: session %s finished", session_id)
+                        break
+                    # Session still running, continue waiting
+                    continue
+
                 if event is None:
                     logger.info("SSE stream closed for session %s", session_id)
                     break
                 yield event
+        except asyncio.CancelledError:
+            logger.info("SSE stream cancelled for session %s", session_id)
+            raise
         finally:
             handle.stream.unsubscribe(q)
 
@@ -358,3 +375,4 @@ class Eternity:
             return None
         handle.thread.join(timeout=timeout)
         return handle.result
+

@@ -4,12 +4,14 @@ from __future__ import annotations
 import base64
 import logging
 import subprocess
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
 
 import cv2
 import numpy as np
+import win32gui
 
 from tools.registry import registry, tool_result
 
@@ -40,6 +42,7 @@ class AppController:
         self.ui_parser = UIParser(config.workspace.weights_dir, screenshot_max_dim=config.workspace.screenshot_max_dim)
         self._screenshot_dir = Path(config.workspace.screenshot_dir)
         self._processes: dict[str, process.AppProcessManager] = {}
+        self._input_lock = threading.Lock()  # Protects foreground+input operations
 
     # ── Per-app helpers ────────────────────────────────────────────────
 
@@ -58,6 +61,16 @@ class AppController:
 
     def is_launcher_running(self, app: str) -> bool:
         return self._get_process(app).is_launcher_running
+
+    def _check_app_running(self, app: str | None) -> dict:
+        if not app:
+            return {"error": "Missing required parameter: 'app'. Use list_apps() to see available apps."}
+        return {"app": app, "running": self.is_app_running(app)}
+
+    def _check_launcher_running(self, app: str | None) -> dict:
+        if not app:
+            return {"error": "Missing required parameter: 'app'. Use list_apps() to see available apps."}
+        return {"app": app, "running": self.is_launcher_running(app)}
 
     # ── Window discovery ────────────────────────────────────────────────
 
@@ -110,10 +123,13 @@ class AppController:
         logger.info("analyze: found %d ui_elements", len(parsed))
 
         bbox_path = str(date_dir / f"{app}_{ts}_bbox.jpeg")
-        self._save_bbox_overlay(compressed, parsed, bbox_path, hwnd=hwnd, orig_size=(h, w))
+        self._save_bbox_overlay(compressed, parsed, bbox_path, hwnd=hwnd)
 
         elapsed = time.time() - t0
         logger.info("analyze: done in %.2fs", elapsed)
+
+        # Get mouse position relative to window client area
+        mouse_pos = self._get_mouse_position(hwnd)
 
         return {
             "width": compressed.shape[1],
@@ -121,6 +137,7 @@ class AppController:
             "ui_elements": parsed,
             IMAGE_PATH_KEY: bbox_path,
             SOM_IMAGE_PATH_KEY: bbox_path,
+            "mouse_position": mouse_pos,
             "bbox_desc": (
                 "All element bbox coordinates are normalized to [0, 1000] as "
                 "[x1, y1, x2, y2], where (x1,y1) is top-left and (x2,y2) is "
@@ -163,7 +180,8 @@ class AppController:
             logger.info("click: %s window not found", target)
             return {"success": False, "error": f"{target} window not found for '{app}'"}
 
-        result = self.input.click_normalized(hwnd, x, y, clicks=clicks)
+        with self._input_lock:
+            result = self.input.click_normalized(hwnd, x, y, clicks=clicks)
         elapsed = time.time() - t0
         logger.info("click: done in %.2fs, success=%s", elapsed, result.get("success"))
         return result
@@ -178,8 +196,9 @@ class AppController:
             logger.info("press_key: %s window not found", target)
             return {"success": False, "error": f"{target} window not found for '{app}'"}
 
-        self._force_foreground(hwnd)
-        self.input.press_key(key, wait_time)
+        with self._input_lock:
+            self._force_foreground(hwnd)
+            self.input.press_key(key, wait_time)
         elapsed = time.time() - t0
         logger.info("press_key: done in %.2fs", elapsed)
         return {"success": True, "key": key}
@@ -194,9 +213,10 @@ class AppController:
             logger.info("type_text: %s window not found", target)
             return {"success": False, "error": f"{target} window not found for '{app}'"}
 
-        self._force_foreground(hwnd)
-        time.sleep(0.1)
-        result = self.input.type_text(text)
+        with self._input_lock:
+            self._force_foreground(hwnd)
+            time.sleep(0.1)
+            result = self.input.type_text(text)
         elapsed = time.time() - t0
         logger.info("type_text: done in %.2fs, success=%s", elapsed, result.get("success"))
         return result
@@ -215,16 +235,39 @@ class AppController:
         if region is None:
             return {"success": False, "error": "Window client region not available"}
 
-        self._force_foreground(hwnd)
-        abs_x1 = region.left + int(x1 / 1000 * region.width)
-        abs_y1 = region.top + int(y1 / 1000 * region.height)
-        abs_x2 = region.left + int(x2 / 1000 * region.width)
-        abs_y2 = region.top + int(y2 / 1000 * region.height)
-
-        self.input.swipe_screen((abs_x1, abs_y1), (abs_x2, abs_y2), speed=speed)
+        with self._input_lock:
+            self._force_foreground(hwnd)
+            abs_x1 = region.left + int(x1 / 1000 * region.width)
+            abs_y1 = region.top + int(y1 / 1000 * region.height)
+            abs_x2 = region.left + int(x2 / 1000 * region.width)
+            abs_y2 = region.top + int(y2 / 1000 * region.height)
+            self.input.swipe_screen((abs_x1, abs_y1), (abs_x2, abs_y2), speed=speed)
         elapsed = time.time() - t0
         logger.info("swipe_screen: done in %.2fs", elapsed)
         return {"success": True, "from": [x1, y1], "to": [x2, y2]}
+
+    def move_mouse(self, x: int, y: int, app: str, target: str = "app") -> dict:
+        """Move mouse cursor to normalized [0,1000] coordinates."""
+        t0 = time.time()
+        logger.info("move_mouse(x=%d, y=%d, app=%s, target=%s)", x, y, app, target)
+
+        hwnd = self._find_window(app, target)
+        if hwnd is None:
+            logger.info("move_mouse: %s window not found", target)
+            return {"success": False, "error": f"{target} window not found for '{app}'"}
+
+        region = self.window.get_client_region(hwnd)
+        if region is None:
+            return {"success": False, "error": "Window client region not available"}
+
+        with self._input_lock:
+            self._force_foreground(hwnd)
+            abs_x = region.left + int(x / 1000 * region.width)
+            abs_y = region.top + int(y / 1000 * region.height)
+            self.input.mouse_move_screen(abs_x, abs_y)
+        elapsed = time.time() - t0
+        logger.info("move_mouse: done in %.2fs", elapsed)
+        return {"success": True, "x": x, "y": y}
 
     def launch(self, app: str | None = None, exe: str | None = None) -> dict:
         """Start the launcher and wait for its window.
@@ -432,6 +475,40 @@ class AppController:
         )
 
         registry.register(
+            name="move_mouse",
+            toolset=AppController.TOOLSET,
+            schema={
+                "description": "Move mouse cursor to normalized [0,1000] coordinates on the app or launcher window. Brings the target window to foreground first. Use to position the cursor over a UI element without clicking.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "x": {
+                            "type": "integer",
+                            "description": "X coordinate in normalized [0, 1000] range.",
+                        },
+                        "y": {
+                            "type": "integer",
+                            "description": "Y coordinate in normalized [0, 1000] range.",
+                        },
+                        "app": {
+                            "type": "string",
+                            "description": "Which app to operate on, e.g. 'nikke' or 'wutheringwave'.",
+                        },
+                        "target": {
+                            "type": "string",
+                            "enum": ["app", "launcher"],
+                            "description": "Which window to operate on: 'app' (default) or 'launcher'.",
+                        },
+                    },
+                    "required": ["x", "y", "app", "target"],
+                },
+            },
+            handler=lambda args, **kw: tool_result(
+                self.move_mouse(x=args["x"], y=args["y"], app=args["app"], target=args.get("target", "app"))
+            ),
+        )
+
+        registry.register(
             name="press_key",
             toolset=AppController.TOOLSET,
             schema={
@@ -496,10 +573,10 @@ class AppController:
         )
 
         registry.register(
-            name="swipe_screen",
+            name="drag",
             toolset=AppController.TOOLSET,
             schema={
-                "description": "Swipe from one point to another on the app or launcher window using natural touch simulation. Brings the target window to foreground before swiping. Coordinates are normalized [0,1000]. Use for scrolling lists, panning maps, or dragging UI elements.",
+                "description": "Drag from one point to another on the app or launcher window using natural mouse simulation. Brings the target window to foreground before dragging. Coordinates are normalized [0,1000]. Use for scrolling lists, panning maps, or dragging UI elements.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -602,7 +679,7 @@ class AppController:
                 },
             },
             handler=lambda args, **kw: tool_result(
-                {"running": self.is_app_running(app=args["app"])}
+                self._check_app_running(args.get("app"))
             ),
         )
 
@@ -623,7 +700,7 @@ class AppController:
                 },
             },
             handler=lambda args, **kw: tool_result(
-                {"running": self.is_launcher_running(app=args["app"])}
+                self._check_launcher_running(args.get("app"))
             ),
         )
 
@@ -653,8 +730,36 @@ class AppController:
             return self.find_launcher_window(app)
         return self.find_app_window(app)
 
+    def _get_mouse_position(self, hwnd: int) -> dict:
+        """Get normalized mouse position [0,1000] relative to window client area."""
+        try:
+            sx, sy = win32gui.GetCursorPos()
+            if not self.window.is_valid(hwnd):
+                return {"normalized": None, "error": "Invalid window"}
+
+            ox, oy = win32gui.ClientToScreen(hwnd, (0, 0))
+            rect = win32gui.GetClientRect(hwnd)
+            width = rect[2]
+            height = rect[3]
+
+            if width <= 0 or height <= 0:
+                return {"normalized": None, "error": "Zero-size window"}
+
+            # Cursor relative to client area
+            cx = sx - ox
+            cy = sy - oy
+
+            # Normalize to [0, 1000]
+            nx = int(cx / width * 1000) if width > 0 else None
+            ny = int(cy / height * 1000) if height > 0 else None
+
+            return {"normalized": [nx, ny] if nx is not None and ny is not None else None}
+        except Exception as e:
+            logger.debug("Failed to get mouse position: %s", e)
+            return {"normalized": None, "error": str(e)}
+
     def _save_bbox_overlay(self, image, elements: list, path: str, *,
-                           hwnd: int | None = None, orig_size: tuple[int, int] | None = None) -> None:
+                           hwnd: int | None = None) -> None:
         """Draw normalized [0,1000] bboxes onto image and save to path."""
         from PIL import Image, ImageDraw, ImageFont
 
@@ -688,21 +793,17 @@ class AppController:
         # Draw mouse cursor position as red crosshair
         if hwnd is not None and self.window.is_valid(hwnd):
             try:
-                import win32gui
-                sx, sy = win32gui.GetCursorPos()
-                ox, oy = win32gui.ClientToScreen(hwnd, (0, 0))
-                # Cursor position relative to client area in original pixel coords
-                cx, cy = sx - ox, sy - oy
-                # Scale to compressed image coords
-                if orig_size is not None:
-                    oh, ow = orig_size
-                    cx = int(cx * w / ow)
-                    cy = int(cy * h / oh)
-                if 0 <= cx < w and 0 <= cy < h:
-                    cs = 10
-                    draw.line([(cx - cs, cy), (cx + cs, cy)], fill=(255, 0, 0), width=2)
-                    draw.line([(cx, cy - cs), (cx, cy + cs)], fill=(255, 0, 0), width=2)
-                    draw.ellipse([cx - 4, cy - 4, cx + 4, cy + 4], fill=(255, 0, 0))
+                mouse = self._get_mouse_position(hwnd)
+                nx, ny = mouse.get("normalized", (None, None))
+                if nx is not None and ny is not None:
+                    # Convert normalized [0,1000] to compressed image coords
+                    cx = int(nx / 1000 * w)
+                    cy = int(ny / 1000 * h)
+                    if 0 <= cx < w and 0 <= cy < h:
+                        cs = 10
+                        draw.line([(cx - cs, cy), (cx + cs, cy)], fill=(255, 0, 0), width=2)
+                        draw.line([(cx, cy - cs), (cx, cy + cs)], fill=(255, 0, 0), width=2)
+                        draw.ellipse([cx - 4, cy - 4, cx + 4, cy + 4], fill=(255, 0, 0))
             except Exception:
                 pass
 

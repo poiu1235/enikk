@@ -57,11 +57,34 @@ class WorkspaceConfig:
 
 
 @dataclass
+class PlatformSettings:
+    """Per-platform IM settings."""
+    enabled: bool = False
+    token: str = ""  # bot token (Telegram, Discord, Slack)
+    extra: dict = field(default_factory=dict)  # platform-specific (app_id, client_secret, etc.)
+
+
+@dataclass
+class IMConfig:
+    """IM platform integration (Telegram, Discord, etc.)."""
+    platforms: dict[str, PlatformSettings] = field(default_factory=dict)
+
+    @property
+    def active_platform(self) -> tuple[str, PlatformSettings] | None:
+        """Return the first enabled (platform_name, settings) pair."""
+        for name, ps in self.platforms.items():
+            if ps.enabled:
+                return name, ps
+        return None
+
+
+@dataclass
 class Config:
     apps: dict[str, AppConfig] = field(default_factory=dict)
     server: ServerConfig = field(default_factory=ServerConfig)
     model: ModelConfig = field(default_factory=ModelConfig)
     workspace: WorkspaceConfig = field(default_factory=WorkspaceConfig)
+    im: IMConfig = field(default_factory=IMConfig)
     log_level: str = "INFO"
 
     # ── Helpers ───────────────────────────────────────────────────────
@@ -156,6 +179,16 @@ class Config:
                 k: v for k, v in wd.items()
                 if k in {f.name for f in fields(WorkspaceConfig)}
             })
+        if "im" in data:
+            im_data = data["im"]
+            platforms = {}
+            if "platforms" in im_data:
+                for name, pdata in im_data["platforms"].items():
+                    platforms[name] = PlatformSettings(**{
+                        k: v for k, v in pdata.items()
+                        if k in {f.name for f in fields(PlatformSettings)}
+                    })
+            cfg.im = IMConfig(platforms=platforms)
         if "log_level" in data:
             cfg.log_level = data["log_level"]
         return cfg

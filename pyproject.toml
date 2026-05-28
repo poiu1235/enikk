@@ -5,8 +5,8 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "enikk"
 version = "0.1.0"
-description = "Enikk: AI Agent for desktop automation."
-requires-python = ">=3.11"
+description = "Enikk: Self-improving GUI Agent."
+requires-python = ">=3.10"
 dependencies = [
     "fastapi>=0.110",
     "uvicorn>=0.27",
@@ -32,7 +32,7 @@ dev = [
 ]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.10"
 ignore_missing_imports = true
 
 [project.scripts]

@@ -1,7 +1,6 @@
 """FastAPI HTTP server for Enikk."""
 import json
 import logging
-from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
@@ -15,17 +14,10 @@ logger = logging.getLogger(__name__)
 
 
 def create_app(eternity: Eternity) -> FastAPI:
-
-    @asynccontextmanager
-    async def lifespan(app: FastAPI):
-        yield
-        eternity.shutdown()
-
     app = FastAPI(
         title="Enikk API",
-        description="Enikk: AI Agent for desktop automation.",
+        description="Enikk: Self-improving GUI Agent.",
         version="0.1.0",
-        lifespan=lifespan,
     )
 
     static_dir = Path(__file__).parent / "static"
