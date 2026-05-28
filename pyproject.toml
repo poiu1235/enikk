@@ -42,7 +42,7 @@ enikk = "enikk.__main__:main"
 include = ["enikk*"]
 
 [tool.setuptools.package-data]
-enikk = ["static/**/*"]
+enikk = ["static/**/*", "skills/**/*"]
 
 [tool.ruff]
 target-version = "py310"

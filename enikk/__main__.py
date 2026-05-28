@@ -10,6 +10,7 @@ from pathlib import Path
 _enikk_home = Path.home() / ".enikk"
 _enikk_home.mkdir(parents=True, exist_ok=True)
 os.environ["HERMES_HOME"] = str(_enikk_home)
+os.environ["HERMES_BUNDLED_SKILLS"] = str(Path(__file__).parent / "skills")
 
 import uvicorn  # noqa: E402
 

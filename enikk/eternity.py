@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from urllib.parse import quote
 
 import run_agent
+import tools.skills_sync
 from hermes_state import SessionDB
 
 from .prompts import DEFAULT_SYSTEM_PROMPT
@@ -99,7 +100,9 @@ class Eternity:
     # ── Setup ──────────────────────────────────────────────────────────
 
     def setup(self) -> None:
-        """One-time init: create SessionDB, GameController, register tools."""
+        """One-time init: sync bundled skills to ~/.enikk/skills/, create SessionDB, GameController, register tools."""
+        tools.skills_sync.sync_skills(quiet=True)
+
         self._session_db = SessionDB()
         logger.info("SessionDB at %s", self._session_db.db_path)
 
