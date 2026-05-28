@@ -56,8 +56,10 @@ def cmd_daemon(args):
  |_____| |_| \_||_____||_|\_\ |_|\_\
 
  Enikk - Self-improving GUI Agent
+
+ Dashboard: http://{host}:{port}/
 """
-    logger.info(logo)
+    logger.info(logo.format(host=cfg.server.host, port=cfg.server.port))
 
     eternity = Eternity(cfg)
     eternity.setup()
