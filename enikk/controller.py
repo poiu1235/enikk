@@ -119,7 +119,7 @@ class AppController:
             "width": compressed.shape[1],
             "height": compressed.shape[0],
             "ui_elements": parsed,
-            IMAGE_PATH_KEY: path,
+            IMAGE_PATH_KEY: bbox_path,
             SOM_IMAGE_PATH_KEY: bbox_path,
             "bbox_desc": (
                 "All element bbox coordinates are normalized to [0, 1000] as "
@@ -183,6 +183,23 @@ class AppController:
         elapsed = time.time() - t0
         logger.info("press_key: done in %.2fs", elapsed)
         return {"success": True, "key": key}
+
+    def type_text(self, text: str, app: str, target: str = "app") -> dict:
+        """Type text into the app or launcher window via clipboard paste (Ctrl+V). Supports Unicode/CJK."""
+        t0 = time.time()
+        logger.info("type_text(app=%s, target=%s, len=%d)", app, target, len(text))
+
+        hwnd = self._find_window(app, target)
+        if hwnd is None:
+            logger.info("type_text: %s window not found", target)
+            return {"success": False, "error": f"{target} window not found for '{app}'"}
+
+        self._force_foreground(hwnd)
+        time.sleep(0.1)
+        result = self.input.type_text(text)
+        elapsed = time.time() - t0
+        logger.info("type_text: done in %.2fs, success=%s", elapsed, result.get("success"))
+        return result
 
     def swipe_screen(self, x1: int, y1: int, x2: int, y2: int, app: str, target: str = "app", speed: float = 1.0) -> dict:
         """Swipe from (x1,y1) to (x2,y2) in normalized [0,1000] coordinates."""
@@ -445,6 +462,36 @@ class AppController:
             },
             handler=lambda args, **kw: tool_result(
                 self.press_key(key=args["key"], app=args["app"], target=args.get("target", "app"), wait_time=args.get("wait_time", 0.2))
+            ),
+        )
+
+        registry.register(
+            name="type_text",
+            toolset=AppController.TOOLSET,
+            schema={
+                "description": "Type text into the focused input field on the app or launcher window. Supports Unicode and CJK characters via clipboard paste (Ctrl+V). Brings the target window to foreground first. Use after click() to focus a text field.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "text": {
+                            "type": "string",
+                            "description": "The text string to type into the active input field.",
+                        },
+                        "app": {
+                            "type": "string",
+                            "description": "Which app to operate on, e.g. 'nikke' or 'wutheringwave'.",
+                        },
+                        "target": {
+                            "type": "string",
+                            "enum": ["app", "launcher"],
+                            "description": "Which window to type into: 'app' (default) or 'launcher'.",
+                        },
+                    },
+                    "required": ["text", "app"],
+                },
+            },
+            handler=lambda args, **kw: tool_result(
+                self.type_text(text=args["text"], app=args["app"], target=args.get("target", "app"))
             ),
         )
 

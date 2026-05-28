@@ -1,6 +1,7 @@
 """Input helpers operating on explicit window handles."""
 from __future__ import annotations
 
+import ctypes
 import math
 import random
 import time
@@ -75,6 +76,54 @@ class InputService:
         pyautogui.keyDown(key)
         time.sleep(wait_time)
         pyautogui.keyUp(key)
+
+    def type_text(self, text: str) -> dict:
+        """Type text via clipboard (Ctrl+V) to support Unicode/CJK characters."""
+        if not text:
+            return {"success": False, "error": "Empty text"}
+
+        CF_UNICODETEXT = 13
+        encoded = text.encode("utf-16-le") + b"\x00\x00"
+        user32 = ctypes.windll.user32
+        kernel32 = ctypes.windll.kernel32
+
+        kernel32.GlobalAlloc.restype = ctypes.c_void_p
+        kernel32.GlobalAlloc.argtypes = [ctypes.c_uint, ctypes.c_size_t]
+        kernel32.GlobalLock.restype = ctypes.c_void_p
+        kernel32.GlobalLock.argtypes = [ctypes.c_void_p]
+        kernel32.GlobalUnlock.restype = ctypes.c_bool
+        kernel32.GlobalUnlock.argtypes = [ctypes.c_void_p]
+        kernel32.GlobalFree.restype = ctypes.c_void_p
+        kernel32.GlobalFree.argtypes = [ctypes.c_void_p]
+        user32.OpenClipboard.argtypes = [ctypes.c_void_p]
+        user32.EmptyClipboard.restype = ctypes.c_bool
+        user32.SetClipboardData.restype = ctypes.c_void_p
+        user32.SetClipboardData.argtypes = [ctypes.c_uint, ctypes.c_void_p]
+        user32.CloseClipboard.restype = ctypes.c_bool
+
+        buf = kernel32.GlobalAlloc(0x0042, len(encoded))  # GMEM_MOVEABLE | GMEM_ZEROINIT
+        if not buf:
+            return {"success": False, "error": "GlobalAlloc failed"}
+        ptr = kernel32.GlobalLock(buf)
+        if not ptr:
+            kernel32.GlobalFree(buf)
+            return {"success": False, "error": "GlobalLock failed"}
+        ctypes.memmove(ptr, encoded, len(encoded))
+        kernel32.GlobalUnlock(buf)
+
+        if not user32.OpenClipboard(None):
+            kernel32.GlobalFree(buf)
+            return {"success": False, "error": "OpenClipboard failed"}
+        user32.EmptyClipboard()
+        ok = user32.SetClipboardData(CF_UNICODETEXT, buf)
+        user32.CloseClipboard()
+        if not ok:
+            kernel32.GlobalFree(buf)
+            return {"success": False, "error": "SetClipboardData failed"}
+
+        pyautogui.hotkey("ctrl", "v")
+        time.sleep(0.1)
+        return {"success": True, "length": len(text)}
 
     def swipe_screen(self, p1, p2, speed: float = 1.0):
         """Natural swipe using cubic Bezier curve with easing and random jitter."""
