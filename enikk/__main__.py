@@ -8,17 +8,13 @@ import sys
 import threading
 from pathlib import Path
 
+from . import __version__
+
 # Must be set BEFORE importing enikk modules (which import hermes at module level)
 _enikk_home = Path.home() / ".enikk"
 _enikk_home.mkdir(parents=True, exist_ok=True)
 os.environ["HERMES_HOME"] = str(_enikk_home)
 os.environ["HERMES_BUNDLED_SKILLS"] = str(Path(__file__).parent / "skills")
-
-import uvicorn  # noqa: E402
-
-from .config import Config  # noqa: E402
-from .eternity import Eternity  # noqa: E402
-from .server import create_app  # noqa: E402
 
 
 logger = logging.getLogger(__name__)
@@ -28,6 +24,12 @@ logger = logging.getLogger(__name__)
 
 def cmd_daemon(args):
     """Start the Enikk daemon process (HTTP mode)."""
+    import uvicorn
+
+    from .config import Config
+    from .eternity import Eternity
+    from .server import create_app
+
     if sys.platform == 'win32':
         sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
         sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
@@ -111,6 +113,13 @@ def cmd_daemon(args):
         os._exit(0)
 
 
+# ── Version command ───────────────────────────────────────────────────
+
+def cmd_version(args):
+    """Show version information."""
+    print(f"Enikk v{__version__}")
+
+
 # ── Main entrypoint ───────────────────────────────────────────────────
 
 def main():
@@ -122,6 +131,9 @@ def main():
     daemon_p = sub.add_parser("daemon", help="Start the game monitor daemon (HTTP)")
     daemon_p.add_argument("--config", type=str, help="Path to YAML config file")
     daemon_p.set_defaults(func=cmd_daemon)
+
+    version_p = sub.add_parser("version", help="Show version information")
+    version_p.set_defaults(func=cmd_version)
 
     args = parser.parse_args()
     if not args.command:
