@@ -6,10 +6,88 @@ from concurrent.futures import ThreadPoolExecutor
 
 import cv2
 import numpy as np
+import onnxruntime as ort
 from rapidocr_onnxruntime import RapidOCR
-from ultralytics import YOLO
 
 logger = logging.getLogger(__name__)
+
+
+def _letterbox(img: np.ndarray, new_shape: tuple[int, int] = (640, 640),
+               color: tuple[int, int, int] = (114, 114, 114)) -> tuple[np.ndarray, float, tuple[int, int]]:
+    """Resize image with padding to maintain aspect ratio.
+
+    Returns:
+        - Resized and padded image
+        - Scale ratio
+        - Padding (dw, dh)
+    """
+    shape = img.shape[:2]  # current shape [height, width]
+    r = min(new_shape[0] / shape[0], new_shape[1] / shape[1])
+
+    new_unpad = int(round(shape[1] * r)), int(round(shape[0] * r))
+    dw = (new_shape[1] - new_unpad[0]) / 2
+    dh = (new_shape[0] - new_unpad[1]) / 2
+
+    if shape[::-1] != new_unpad:
+        img = cv2.resize(img, new_unpad, interpolation=cv2.INTER_LINEAR)
+
+    top, bottom = int(round(dh - 0.1)), int(round(dh + 0.1))
+    left, right = int(round(dw - 0.1)), int(round(dw + 0.1))
+    img = cv2.copyMakeBorder(img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=color)
+
+    return img, r, (dw, dh)
+
+
+def _xywh2xyxy(x: np.ndarray) -> np.ndarray:
+    """Convert [x, y, w, h] to [x1, y1, x2, y2]."""
+    y = np.copy(x)
+    y[..., 0] = x[..., 0] - x[..., 2] / 2
+    y[..., 1] = x[..., 1] - x[..., 3] / 2
+    y[..., 2] = x[..., 0] + x[..., 2] / 2
+    y[..., 3] = x[..., 1] + x[..., 3] / 2
+    return y
+
+
+def _nms(boxes: np.ndarray, scores: np.ndarray, iou_threshold: float = 0.7) -> np.ndarray:
+    """Non-Maximum Suppression.
+
+    Args:
+        boxes: (N, 4) array of boxes in xyxy format
+        scores: (N,) array of confidence scores
+        iou_threshold: IoU threshold for suppression
+
+    Returns:
+        Array of indices to keep
+    """
+    if len(boxes) == 0:
+        return np.array([], dtype=int)
+
+    x1, y1, x2, y2 = boxes[:, 0], boxes[:, 1], boxes[:, 2], boxes[:, 3]
+    areas = (x2 - x1) * (y2 - y1)
+    order = scores.argsort()[::-1]
+
+    keep = []
+    while order.size > 0:
+        i = order[0]
+        keep.append(i)
+
+        if order.size == 1:
+            break
+
+        xx1 = np.maximum(x1[i], x1[order[1:]])
+        yy1 = np.maximum(y1[i], y1[order[1:]])
+        xx2 = np.minimum(x2[i], x2[order[1:]])
+        yy2 = np.minimum(y2[i], y2[order[1:]])
+
+        w = np.maximum(0.0, xx2 - xx1)
+        h = np.maximum(0.0, yy2 - yy1)
+        inter = w * h
+
+        iou = inter / (areas[i] + areas[order[1:]] - inter)
+        inds = np.where(iou <= iou_threshold)[0]
+        order = order[inds + 1]
+
+    return np.array(keep, dtype=int)
 
 
 def _box_area(box):
@@ -44,17 +122,21 @@ class UIParser:
     def __init__(self, weights_dir: str | None = None, screenshot_max_dim: int = 1366):
         self.max_dim = screenshot_max_dim
         self.ocr = RapidOCR(use_angle_cls=False)
-        self.yolo: YOLO | None = None
+        self.yolo_session = None
+        self.yolo_names = {0: "icon"}  # single-class model
 
         if weights_dir:
-            model_path = os.path.join(weights_dir, "icon_detect", "model.pt")
-            try:
-                logger.info(f"Loading YOLO: {model_path}")
-                self.yolo = YOLO(model_path)
-                logger.info("YOLO model loaded")
-            except Exception as e:
-                logger.warning(f"Failed to load YOLO model: {e}", exc_info=True)
-                self.yolo = None
+            onnx_path = os.path.join(weights_dir, "icon_detect", "model.onnx")
+            if not os.path.exists(onnx_path):
+                logger.warning(f"ONNX model not found: {onnx_path}. Run: python scripts/export_yolo_onnx.py weights/icon_detect/model.pt")
+            else:
+                try:
+                    logger.info(f"Loading YOLO ONNX: {onnx_path}")
+                    self.yolo_session = ort.InferenceSession(onnx_path, providers=["CPUExecutionProvider"])
+                    logger.info("YOLO ONNX model loaded")
+                except Exception as e:
+                    logger.warning(f"Failed to load YOLO ONNX model: {e}", exc_info=True)
+                    self.yolo_session = None
         else:
             logger.info("No weights_dir provided, YOLO icon detection disabled")
 
@@ -68,33 +150,70 @@ class UIParser:
         return resized, (h, w)
 
     def _detect_icons(self, resized: np.ndarray) -> list[dict]:
-        """YOLO detection on compressed image. Returns boxes in normalized [0, 1000]."""
-        if self.yolo is None:
+        """YOLO ONNX detection on compressed image. Returns boxes in normalized [0, 1000]."""
+        if self.yolo_session is None:
             return []
-        rh, rw = resized.shape[:2]
-        results = self.yolo.predict(source=resized, conf=0.01, iou=0.7, verbose=False)
+
+        orig_h, orig_w = resized.shape[:2]
+
+        # Preprocess: letterbox to 640x640, normalize, transpose to BCHW
+        img, ratio, (dw, dh) = _letterbox(resized, (640, 640))
+        img = img.astype(np.float32) / 255.0
+        img = img.transpose(2, 0, 1)[np.newaxis, ...]  # HWC -> BCHW
+
+        # Inference
+        input_name = self.yolo_session.get_inputs()[0].name
+        output = self.yolo_session.run(None, {input_name: img})[0]
+
+        # Post-process: transpose (1, 5, 8400) -> (8400, 5)
+        output = output[0].transpose(1, 0)  # (8400, 5)
+        boxes_xywh = output[:, :4]
+        scores = output[:, 4]
+
+        # Confidence threshold
+        mask = scores > 0.01
+        boxes_xywh = boxes_xywh[mask]
+        scores = scores[mask]
+
+        if len(boxes_xywh) == 0:
+            return []
+
+        # Convert xywh -> xyxy
+        boxes_xyxy = _xywh2xyxy(boxes_xywh)
+
+        # Rescale to original image coordinates
+        boxes_xyxy[:, [0, 2]] = (boxes_xyxy[:, [0, 2]] - dw) / ratio
+        boxes_xyxy[:, [1, 3]] = (boxes_xyxy[:, [1, 3]] - dh) / ratio
+
+        # Clip to image bounds
+        boxes_xyxy[:, [0, 2]] = boxes_xyxy[:, [0, 2]].clip(0, orig_w)
+        boxes_xyxy[:, [1, 3]] = boxes_xyxy[:, [1, 3]].clip(0, orig_h)
+
+        # NMS
+        keep = _nms(boxes_xyxy, scores, iou_threshold=0.7)
+        boxes_xyxy = boxes_xyxy[keep]
+        scores = scores[keep]
+
+        # Build result
+        raw: list[tuple] = []
+        for box, score in zip(boxes_xyxy, scores):
+            x1, y1, x2, y2 = box
+            raw.append((x1, y1, x2, y2, "icon"))
+
+        # Sort top-to-bottom, left-to-right for stable IDs across frames
+        raw.sort(key=lambda b: (int((b[1] + b[3]) / 2), int((b[0] + b[2]) / 2)))
+
         boxes: list[dict] = []
-        if results[0].boxes is not None:
-            raw: list[tuple] = []
-            for box in results[0].boxes:  # type: ignore[attr-defined]
-                x1, y1, x2, y2 = box.xyxy[0].tolist()
-                cls_idx = int(box.cls[0].item())
-                label = self.yolo.names.get(cls_idx, f"class_{cls_idx}")
-                raw.append((x1, y1, x2, y2, label))
-
-            # Sort top-to-bottom, left-to-right for stable IDs across frames
-            raw.sort(key=lambda b: (int((b[1] + b[3]) / 2), int((b[0] + b[2]) / 2)))
-
-            for idx, (x1, y1, x2, y2, label) in enumerate(raw):
-                boxes.append({
-                    "bbox": [
-                        max(0, min(1000, int(x1 / rw * 1000))),
-                        max(0, min(1000, int(y1 / rh * 1000))),
-                        max(0, min(1000, int(x2 / rw * 1000))),
-                        max(0, min(1000, int(y2 / rh * 1000))),
-                    ],
-                    "label": f"{label}_{idx + 1}",
-                })
+        for idx, (x1, y1, x2, y2, label) in enumerate(raw):
+            boxes.append({
+                "bbox": [
+                    max(0, min(1000, int(x1 / orig_w * 1000))),
+                    max(0, min(1000, int(y1 / orig_h * 1000))),
+                    max(0, min(1000, int(x2 / orig_w * 1000))),
+                    max(0, min(1000, int(y2 / orig_h * 1000))),
+                ],
+                "label": f"{label}_{idx + 1}",
+            })
         return boxes
 
     def _detect_text(self, resized: np.ndarray) -> list[dict]:
