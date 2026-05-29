@@ -251,7 +251,7 @@ class IMBridge:
                         name = data.get("name", "")
                         args = data.get("args", {})
                         args_str = str(args)[:80] if args else ""
-                        hint = f"[{name}({args_str})]" if args_str else f"[{name}()]"
+                        hint = f"`{name}({args_str})`" if args_str else f"`{name}()`"
                         consumer.on_delta(None)
                         consumer.on_delta("🔧 " + hint + "\n")
                     logger.debug("IM [%s] tool_call: %s", chat_id, data.get("name", ""))
@@ -270,6 +270,11 @@ class IMBridge:
                 elif event_type == "session":
                     status = data.get("status")
                     if status in ("completed", "stopped", "error"):
+                        # Send final_response if present and not already fully streamed
+                        final_response = data.get("final_response")
+                        if final_response and not consumer.already_sent:
+                            logger.debug("IM [%s] sending final_response", chat_id)
+                            consumer.on_delta(final_response)
                         logger.info("IM [%s] session %s", chat_id, status)
                         break
         finally:

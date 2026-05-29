@@ -192,7 +192,12 @@ class Eternity:
                 task, system_message=system_message, conversation_history=history,
             )
             handle.result = result
-            handle.publish("session", {"status": "completed", **self._get_context_usage(handle)})
+            final_response = result.get("final_response")
+            handle.publish("session", {
+                "status": "completed",
+                "final_response": final_response,
+                **self._get_context_usage(handle),
+            })
         except InterruptedError:
             logger.info("Session %s interrupted", handle.session_id)
             handle.result = {"status": "interrupted"}
