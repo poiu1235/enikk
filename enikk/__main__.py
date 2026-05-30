@@ -30,6 +30,7 @@ def cmd_daemon(args):
     # Lazy imports: keep lightweight commands (version, --help) fast by
     # deferring heavy deps (hermes, ultralytics, fastapi) until daemon starts.
     import uvicorn
+    import webview
 
     from .config import Config
     from .eternity import Eternity
@@ -92,12 +93,31 @@ def cmd_daemon(args):
 
     timeout = 2
     logger.info(f"Starting API server on {cfg.server.host}:{cfg.server.port}")
+
+    # Start uvicorn in background thread
+    uvicorn_thread = threading.Thread(
+        target=uvicorn.run,
+        kwargs={
+            "app": create_app(eternity),
+            "host": cfg.server.host,
+            "port": cfg.server.port,
+            "log_level": "info",
+            "timeout_graceful_shutdown": timeout,
+            "log_config": None,
+        },
+        daemon=True,
+    )
+    uvicorn_thread.start()
+
+    # Open webview in main thread
     try:
-        uvicorn.run(
-            create_app(eternity), host=cfg.server.host, port=cfg.server.port,
-            log_level="info", timeout_graceful_shutdown=timeout,
-            log_config=None,
+        webview.create_window(
+            "Enikk Dashboard",
+            url=f"http://{cfg.server.host}:{cfg.server.port}",
+            width=1280,
+            height=800,
         )
+        webview.start()
     except KeyboardInterrupt:
         logger.info("KeyboardInterrupt received")
     finally:
