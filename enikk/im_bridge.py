@@ -275,7 +275,7 @@ class IMBridge:
                         args_str = str(args)[:80] if args else ""
                         hint = f"`{name}({args_str})`" if args_str else f"`{name}()`"
                         consumer.on_delta(None)
-                        consumer.on_delta("🔧 " + hint + "\n")
+                        consumer.on_delta(f"**[{event_type}]** 🔧 {hint}\n")
                     logger.debug("IM [%s] tool_call: %s", chat_id, data.get("name", ""))
 
                 elif event_type == EVT_TOOL_RESULT:
@@ -283,6 +283,8 @@ class IMBridge:
                     logger.debug("IM [%s] tool_result: %s", chat_id, name)
                     img_path = _extract_image_path(data.get("result"))
                     if img_path and adapter:
+                        consumer.on_delta(None)
+                        consumer.on_delta(f"**[{event_type}]** 📷 {name}\n")
                         logger.debug("IM [%s] sending image: %s", chat_id, img_path)
                         try:
                             await adapter.send_image(chat_id, img_path)
@@ -290,16 +292,26 @@ class IMBridge:
                             logger.warning("IM [%s] send_image failed for %s", chat_id, img_path)
 
                 elif event_type == EVT_REASONING:
-                    logger.debug("IM [%s] reasoning: %r", chat_id, data.get("text", "")[:50])
+                    text = data.get("text", "")
+                    if text:
+                        consumer.on_delta(None)
+                        consumer.on_delta(f"**[{event_type}]** 💭 {text[:100]}...\n")
+                    logger.debug("IM [%s] reasoning: %r", chat_id, text[:50])
 
                 elif event_type == EVT_STEP_CONTEXT:
+                    step = data.get("step", "")
+                    current = data.get("current", 0)
+                    limit = data.get("limit", 0)
+                    pct = data.get("pct", 0)
+                    consumer.on_delta(None)
+                    consumer.on_delta(f"**[{event_type}]** Step {step}: {current}/{limit} ({pct}%)\n")
                     logger.debug("IM [%s] step_context: %s", chat_id, data)
 
                 elif event_type == EVT_ERROR:
                     msg = data.get("message", "Unknown error")
                     logger.warning("IM [%s] error: %s", chat_id, msg)
                     consumer.on_delta(None)
-                    consumer.on_delta(f"❌ Error: {msg}\n")
+                    consumer.on_delta(f"**[{event_type}]** ❌ {msg}\n")
 
                 elif event_type == EVT_SESSION:
                     status = data.get("status")
@@ -308,7 +320,12 @@ class IMBridge:
                         final_response = data.get("final_response")
                         if final_response and not consumer.already_sent:
                             logger.debug("IM [%s] sending final_response", chat_id)
+                            consumer.on_delta(None)
+                            consumer.on_delta(f"**[{event_type}]** ✅\n")
                             consumer.on_delta(final_response)
+                        else:
+                            consumer.on_delta(None)
+                            consumer.on_delta(f"**[{event_type}]** {status}\n")
                         logger.info("IM [%s] session %s", chat_id, status)
                         break
         finally:
