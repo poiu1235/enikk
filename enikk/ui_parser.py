@@ -204,7 +204,7 @@ class UIParser:
         raw.sort(key=lambda b: (int((b[1] + b[3]) / 2), int((b[0] + b[2]) / 2)))
 
         boxes: list[dict] = []
-        for idx, (x1, y1, x2, y2, label) in enumerate(raw):
+        for x1, y1, x2, y2, label in raw:
             boxes.append({
                 "bbox": [
                     max(0, min(1000, int(x1 / orig_w * 1000))),
@@ -212,7 +212,7 @@ class UIParser:
                     max(0, min(1000, int(x2 / orig_w * 1000))),
                     max(0, min(1000, int(y2 / orig_h * 1000))),
                 ],
-                "label": f"{label}_{idx + 1}",
+                "label": label,
             })
         return boxes
 
