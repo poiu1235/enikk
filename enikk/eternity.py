@@ -78,6 +78,7 @@ class Eternity:
         self.config = config
         self._controller: AppController | None = None
         self._sessions: dict[str, SessionHandle] = {}
+        self._lock = threading.RLock()
         self._registered = False
         self._shutdown = False
 
@@ -159,7 +160,8 @@ class Eternity:
             daemon=True,
         )
         handle.thread = thread
-        self._sessions[session_id] = handle
+        with self._lock:
+            self._sessions[session_id] = handle
         thread.start()
 
         logger.info("Session %s started (task=%r)", session_id, task[:80])
@@ -226,43 +228,46 @@ class Eternity:
 
         If session is not loaded or has finished, auto-loads it and uses message as task.
         """
-        handle = self._sessions.get(session_id)
+        with self._lock:
+            handle = self._sessions.get(session_id)
 
-        # Session not in memory or thread finished — auto-load it
-        if handle is None or not handle.thread.is_alive():
-            # Check if session exists in database
-            messages = self._session_db.get_messages(session_id)
-            if not messages:
-                return False  # Session doesn't exist at all
+            # Session not in memory or thread finished — auto-load it
+            if handle is None or not handle.thread.is_alive():
+                # Check if session exists in database
+                messages = self._session_db.get_messages(session_id)
+                if not messages:
+                    return False  # Session doesn't exist at all
 
-            # Reload session with the new message as task
-            logger.info("Session %s not loaded, auto-loading with message: %s", session_id, message[:80])
-            self.create_session(task=message, session_id=session_id)
+                # Reload session with the new message as task
+                logger.info("Session %s not loaded, auto-loading with message: %s", session_id, message[:80])
+                self.create_session(task=message, session_id=session_id)
+                return True
+
+            # Session is running — steer it
+            handle.agent.steer(message)
+            logger.info("Session %s steered: %s", session_id, message[:80])
             return True
-
-        # Session is running — steer it
-        handle.agent.steer(message)
-        logger.info("Session %s steered: %s", session_id, message[:80])
-        return True
 
     def stop_session(self, session_id: str) -> bool:
         """Interrupt a running session's agent."""
-        handle = self._sessions.get(session_id)
-        if not handle or not handle.thread.is_alive():
-            return False
-        if handle.agent:
-            handle.agent.interrupt()
-            logger.info("Session %s interrupted", session_id)
-        return True
+        with self._lock:
+            handle = self._sessions.get(session_id)
+            if not handle or not handle.thread.is_alive():
+                return False
+            if handle.agent:
+                handle.agent.interrupt()
+                logger.info("Session %s interrupted", session_id)
+            return True
 
     def delete_session(self, session_id: str) -> bool:
         """Delete session from memory and SessionDB."""
-        self._session_db.delete_session(session_id)
-        handle = self._sessions.pop(session_id, None)
-        if handle:
-            handle.stream.close()
-        logger.info("Session %s deleted", session_id)
-        return True
+        with self._lock:
+            self._session_db.delete_session(session_id)
+            handle = self._sessions.pop(session_id, None)
+            if handle:
+                handle.stream.close()
+            logger.info("Session %s deleted", session_id)
+            return True
 
     # ── Lifecycle ───────────────────────────────────────────────────────
 
@@ -272,8 +277,11 @@ class Eternity:
             return
         self._shutdown = True
 
-        logger.info("Shutting down Eternity, stopping %d sessions...", len(self._sessions))
-        for session_id, handle in list(self._sessions.items()):
+        with self._lock:
+            sessions = list(self._sessions.items())
+
+        logger.info("Shutting down Eternity, stopping %d sessions...", len(sessions))
+        for session_id, handle in sessions:
             logger.info("Stopping session %s", session_id)
             handle.stream.close()
             if handle.thread and handle.thread.is_alive():
@@ -283,7 +291,8 @@ class Eternity:
                 if handle.thread.is_alive():
                     logger.debug("Thread %s did not stop within timeout (will be killed on exit)", handle.thread.name)
 
-        self._sessions.clear()
+        with self._lock:
+            self._sessions.clear()
         logger.info("Eternity shutdown complete")
 
     def get_session_messages(
