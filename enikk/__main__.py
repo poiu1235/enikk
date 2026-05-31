@@ -3,6 +3,7 @@ import argparse
 import asyncio
 import io
 import logging
+import logging.handlers
 import os
 import sys
 import threading
@@ -69,6 +70,21 @@ def cmd_daemon(args):
         datefmt="%Y-%m-%d %H:%M:%S",
         force=True,
     )
+
+    # Also write logs to home/logs/enikk.log (rotate 5 files × 10MB)
+    log_dir = _enikk_home / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    file_handler = logging.handlers.RotatingFileHandler(
+        log_dir / "enikk.log",
+        maxBytes=10 * 1024 * 1024,
+        backupCount=5,
+        encoding="utf-8",
+    )
+    file_handler.setFormatter(logging.Formatter(
+        "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    ))
+    logging.getLogger().addHandler(file_handler)
 
     for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
         logging.getLogger(name).handlers.clear()

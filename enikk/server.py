@@ -103,4 +103,32 @@ def create_app(eternity: Eternity) -> FastAPI:
             raise HTTPException(status_code=404, detail="Image not found")
         return FileResponse(str(p))
 
+    @app.get("/api/open_dir")
+    def open_dir(name: str = Query(..., description="Directory name: 'home' or 'logs'")):
+        """Open an Enikk directory in file explorer."""
+        import os
+        import subprocess
+        import platform
+
+        base_dir = Path.home() / ".enikk"
+        dirs = {
+            "home": base_dir,
+            "logs": base_dir / "logs",
+        }
+
+        target = dirs.get(name)
+        if not target:
+            raise HTTPException(status_code=400, detail=f"Unknown directory: {name}. Available: {list(dirs.keys())}")
+
+        target.mkdir(parents=True, exist_ok=True)
+
+        if platform.system() == "Windows":
+            os.startfile(str(target))
+        elif platform.system() == "Darwin":
+            subprocess.run(["open", str(target)])
+        else:
+            subprocess.run(["xdg-open", str(target)])
+
+        return {"status": "opened", "path": str(target)}
+
     return app
