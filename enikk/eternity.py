@@ -17,6 +17,7 @@ from hermes_state import SessionDB
 from .prompts import DEFAULT_SYSTEM_PROMPT
 from .config import Config
 from .controller import AppController, IMAGE_PATH_KEY, SOM_IMAGE_PATH_KEY
+from .events import EVT_DELTA, EVT_TOOL_CALL, EVT_TOOL_RESULT, EVT_REASONING, EVT_STEP_CONTEXT, EVT_ERROR, EVT_SESSION
 
 logger = logging.getLogger(__name__)
 
@@ -137,7 +138,7 @@ class Eternity:
 
         def _publish(event: str, data: dict) -> None:
             """Publish an SSE event, logging only important events."""
-            if event in ("tool_call", "tool_result", "session"):
+            if event in (EVT_TOOL_CALL, EVT_TOOL_RESULT, EVT_SESSION):
                 logger.debug("SSE [%s/%s] %s", session_id, event, json.dumps(data, default=str)[:200])
             handle.publish(event, data)
 
@@ -147,7 +148,7 @@ class Eternity:
             img_url = _extract_image_url(result)
             if img_url:
                 data["imageUrl"] = img_url
-            _publish("tool_result", data)
+            _publish(EVT_TOOL_RESULT, data)
 
         mc = self.config.model
         agent = run_agent.AIAgent(
@@ -161,11 +162,11 @@ class Eternity:
             max_iterations=max_iterations,
             session_id=session_id,
             session_db=self._session_db,
-            tool_start_callback=lambda tc_id, name, args: _publish("tool_call", {"call_id": tc_id, "name": name, "args": args}),
+            tool_start_callback=lambda tc_id, name, args: _publish(EVT_TOOL_CALL, {"call_id": tc_id, "name": name, "args": args}),
             tool_complete_callback=lambda tc_id, name, _args, result: _publish_tool_result(tc_id, name, result),
-            stream_delta_callback=lambda delta: _publish("delta", {"text": delta}) if delta is not None else None,
-            reasoning_callback=lambda text: _publish("reasoning", {"text": text}),
-            step_callback=lambda _count, _tools: _publish("step_context", {"step": _count, **self._get_context_usage(handle).get("context_usage", {})}),
+            stream_delta_callback=lambda delta: _publish(EVT_DELTA, {"text": delta}) if delta is not None else None,
+            reasoning_callback=lambda text: _publish(EVT_REASONING, {"text": text}),
+            step_callback=lambda _count, _tools: _publish(EVT_STEP_CONTEXT, {"step": _count, **self._get_context_usage(handle).get("context_usage", {})}),
         )
 
         handle.agent = agent
@@ -184,7 +185,7 @@ class Eternity:
     def _run_agent(self, handle: SessionHandle, task: str, system_message: str) -> None:
         """Thread target: run the agent conversation, store result on completion."""
         try:
-            handle.publish("session", {"status": "running"})
+            handle.publish(EVT_SESSION, {"status": "running"})
             history = self._session_db.get_messages_as_conversation(handle.session_id)
             if history:
                 logger.info("Session %s loaded %d history messages", handle.session_id, len(history))
@@ -193,7 +194,7 @@ class Eternity:
             )
             handle.result = result
             final_response = result.get("final_response")
-            handle.publish("session", {
+            handle.publish(EVT_SESSION, {
                 "status": "completed",
                 "final_response": final_response,
                 **self._get_context_usage(handle),
@@ -201,12 +202,12 @@ class Eternity:
         except InterruptedError:
             logger.info("Session %s interrupted", handle.session_id)
             handle.result = {"status": "interrupted"}
-            handle.publish("session", {"status": "stopped", **self._get_context_usage(handle)})
+            handle.publish(EVT_SESSION, {"status": "stopped", **self._get_context_usage(handle)})
         except Exception:
             logger.exception("Session %s failed", handle.session_id)
             handle.result = {"error": "agent exception"}
-            handle.publish("session", {"status": "error", **self._get_context_usage(handle)})
-            handle.publish("error", {"message": "agent exception"})
+            handle.publish(EVT_SESSION, {"status": "error", **self._get_context_usage(handle)})
+            handle.publish(EVT_ERROR, {"message": "agent exception"})
         finally:
             logger.info("Session %s finished", handle.session_id)
             handle.stream.close()

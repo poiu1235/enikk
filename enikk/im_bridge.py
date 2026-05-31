@@ -9,6 +9,7 @@ from typing import Optional
 from .config import Config
 from .eternity import Eternity
 from .controller import IMAGE_PATH_KEY, SOM_IMAGE_PATH_KEY
+from .events import EVT_DELTA, EVT_TOOL_CALL, EVT_TOOL_RESULT, EVT_REASONING, EVT_STEP_CONTEXT, EVT_ERROR, EVT_SESSION
 
 logger = logging.getLogger(__name__)
 
@@ -231,13 +232,13 @@ class IMBridge:
                 event_type = event.get("event")
                 data = event.get("data", {})
 
-                if event_type == "delta":
+                if event_type == EVT_DELTA:
                     text = data.get("text", "")
                     if text:
                         logger.debug("IM [%s] delta: %r", chat_id, text)
                         consumer.on_delta(text)
 
-                elif event_type == "tool_call":
+                elif event_type == EVT_TOOL_CALL:
                     if self._tool_notify.get(chat_id, True):
                         name = data.get("name", "")
                         args = data.get("args", {})
@@ -247,7 +248,7 @@ class IMBridge:
                         consumer.on_delta("🔧 " + hint + "\n")
                     logger.debug("IM [%s] tool_call: %s", chat_id, data.get("name", ""))
 
-                elif event_type == "tool_result":
+                elif event_type == EVT_TOOL_RESULT:
                     name = data.get("name", "")
                     logger.debug("IM [%s] tool_result: %s", chat_id, name)
                     img_path = _extract_image_path(data.get("result"))
@@ -258,7 +259,19 @@ class IMBridge:
                         except Exception:
                             logger.warning("IM [%s] send_image failed for %s", chat_id, img_path)
 
-                elif event_type == "session":
+                elif event_type == EVT_REASONING:
+                    logger.debug("IM [%s] reasoning: %r", chat_id, data.get("text", "")[:50])
+
+                elif event_type == EVT_STEP_CONTEXT:
+                    logger.debug("IM [%s] step_context: %s", chat_id, data)
+
+                elif event_type == EVT_ERROR:
+                    msg = data.get("message", "Unknown error")
+                    logger.warning("IM [%s] error: %s", chat_id, msg)
+                    consumer.on_delta(None)
+                    consumer.on_delta(f"❌ Error: {msg}\n")
+
+                elif event_type == EVT_SESSION:
                     status = data.get("status")
                     if status in ("completed", "stopped", "error"):
                         # Send final_response if present and not already fully streamed
