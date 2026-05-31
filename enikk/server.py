@@ -26,7 +26,7 @@ def create_app(eternity: Eternity) -> FastAPI:
 
         @app.get("/")
         def index():
-            return FileResponse(str(static_dir / "index.html"))
+            return FileResponse(str(static_dir / "frontend.html"))
 
     @app.get("/health")
     def health():
