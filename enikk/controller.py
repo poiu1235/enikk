@@ -344,6 +344,73 @@ class AppController:
         logger.info("wait: done")
         return {"status": "waited", "seconds": seconds}
 
+    @staticmethod
+    def _text_similarity(a: str, b: str) -> float:
+        """Simple character-level similarity ratio (0.0-1.0)."""
+        if not a or not b:
+            return 0.0
+        a_lower, b_lower = a.lower(), b.lower()
+        if a_lower in b_lower or b_lower in a_lower:
+            return 1.0
+        matches = sum(1 for x, y in zip(a_lower, b_lower) if x == y)
+        return matches / max(len(a_lower), len(b_lower))
+
+    def wait_for(self, text: str, app: str, target: str = "app",
+                 timeout: float = 90, interval: float = 5,
+                 threshold: float = 0.7) -> dict:
+        """Poll screen via analyze() until target text appears or timeout.
+
+        Args:
+            text: Target text to search for (substring + fuzzy match).
+            app: Which app to operate on.
+            target: 'app' or 'launcher'.
+            timeout: Max seconds to wait.
+            interval: Seconds between polls.
+            threshold: Minimum similarity ratio (0.0-1.0) for fuzzy match.
+
+        Returns:
+            {"found": True, "text": ..., "similarity": ..., "elapsed": ...} on match,
+            or {"found": False, "error": "timeout after Ns", "elapsed": N} on timeout.
+        """
+        t0 = time.time()
+        logger.info("wait_for(text=%r, app=%s, target=%s, timeout=%.0f, interval=%.1f)",
+                    text, app, target, timeout, interval)
+
+        while True:
+            result = self.analyze(app=app, target=target)
+
+            if "error" not in result:
+                elements = result.get("ui_elements", [])
+                best_match = None
+                best_score = 0.0
+                for item in elements:
+                    detected = item.get("text", "")
+                    if not detected:
+                        continue
+                    score = self._text_similarity(text, detected)
+                    if score > best_score:
+                        best_score = score
+                        best_match = item
+
+                if best_match and best_score >= threshold:
+                    elapsed = time.time() - t0
+                    logger.info("wait_for: found %r (similarity=%.2f) in %.1fs",
+                                best_match.get("text"), best_score, elapsed)
+                    return {
+                        "found": True,
+                        "text": best_match.get("text"),
+                        "similarity": round(best_score, 3),
+                        "element": best_match,
+                        "elapsed": round(elapsed, 1),
+                    }
+
+            elapsed = time.time() - t0
+            if elapsed >= timeout:
+                logger.info("wait_for: timeout after %.1fs", elapsed)
+                return {"found": False, "error": f"timeout after {elapsed:.0f}s", "elapsed": round(elapsed, 1)}
+
+            time.sleep(interval)
+
     def stop(self, app: str) -> dict:
         """Stop both app and launcher processes."""
         logger.info("stop(app=%s)", app)
@@ -678,6 +745,50 @@ class AppController:
             },
             handler=lambda args, **kw: tool_result(
                 self.wait(seconds=args["seconds"])
+            ),
+        )
+
+        registry.register(
+            name="wait_for",
+            toolset=AppController.TOOLSET,
+            schema={
+                "description": "Poll the screen via OCR until specific text appears or timeout. More efficient than wait() + analyze() loops for waiting on loading screens, battle results, or UI transitions. Returns immediately when text is found (supports fuzzy matching for OCR typos).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "text": {
+                            "type": "string",
+                            "description": "Text to search for on screen. Supports substring and fuzzy matching (e.g. '点击任意处').",
+                        },
+                        "app": {
+                            "type": "string",
+                            "description": "Which app to operate on, e.g. 'nikke' or 'wutheringwave'.",
+                        },
+                        "target": {
+                            "type": "string",
+                            "enum": ["app", "launcher"],
+                            "description": "Which window to poll: 'app' (default) or 'launcher'.",
+                        },
+                        "timeout": {
+                            "type": "number",
+                            "description": "Maximum seconds to wait (default 90).",
+                        },
+                        "interval": {
+                            "type": "number",
+                            "description": "Seconds between polls (default 5).",
+                        },
+                    },
+                    "required": ["text", "app"],
+                },
+            },
+            handler=lambda args, **kw: tool_result(
+                self.wait_for(
+                    text=args["text"],
+                    app=args["app"],
+                    target=args.get("target", "app"),
+                    timeout=args.get("timeout", 90),
+                    interval=args.get("interval", 5),
+                )
             ),
         )
 

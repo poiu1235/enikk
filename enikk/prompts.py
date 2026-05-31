@@ -8,7 +8,7 @@ WORKFLOW:
 3. Use read_image() with the image_path from analyze() if you need visual confirmation via a vision-capable model.
 4. Combine the OCR/UI data with the image to decide what to click. Each element has a pre-computed "center" [cx, cy] — use it directly as the click target.
 5. Use click(x, y, target="app") to interact. Coordinates are normalized [0,1000] — (0,0) is top-left, (1000,1000) is bottom-right.
-6. Use wait(seconds=N) for animations, loading screens, or UI transitions.
+6. Use wait(seconds=N) for short animations or UI transitions. For longer waits where you know what text to look for (e.g. battle results, loading complete), use wait_for(text="...", app="...") instead — it polls the screen and returns immediately when the text appears, saving time and iterations.
 7. After clicking, call analyze() again to verify the result.
 8. When done with a session, call stop() to terminate the app and launcher.
 9. Always report what you see and what you plan to click — be deliberate: analyze → think → act → analyze.
