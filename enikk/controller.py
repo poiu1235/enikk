@@ -301,14 +301,15 @@ class AppController:
                 return {"error": f"Failed to start executable: {e}"}
         elif not self.is_launcher_running(app):
             logger.info("launch: starting launcher for %s", app)
-            if not self._start_launcher(app):
-                logger.info("launch: failed to start launcher")
-                return {"status": "error", "message": "Failed to start launcher"}
+            err = self._start_launcher(app)
+            if err is not None:
+                logger.info("launch: failed to start launcher: %s", err)
+                return {"error": f"Failed to start launcher: {err}"}
 
         hwnd = self._wait_for_launcher_window(app, timeout=30)
         if hwnd is None:
             logger.info("launch: launcher window not found within 30s")
-            return {"status": "error", "message": "Launcher window not found"}
+            return {"error": "Launcher window not found"}
 
         self._force_foreground(hwnd)
         elapsed = time.time() - t0
@@ -814,11 +815,15 @@ class AppController:
     def _force_foreground(self, hwnd: int) -> bool:
         return self.window.force_foreground(hwnd)
 
-    def _start_launcher(self, app: str) -> bool:
+    def _start_launcher(self, app: str) -> str | None:
+        """Start the launcher process.
+
+        Returns:
+            None on success, or an error message string on failure.
+        """
         pm = self._get_process(app)
         if not pm.launcher:
-            logger.error("No launcher configured for '%s'", app)
-            return False
+            return "No launcher configured"
         return pm.launcher.start()
 
     def _wait_for_launcher_window(self, app: str, timeout: float = 30) -> int | None:

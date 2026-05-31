@@ -5,8 +5,6 @@ import getpass
 import logging
 import os
 import subprocess
-import threading
-import time
 from pathlib import Path
 
 import psutil
@@ -49,11 +47,17 @@ class ManagedProcess:
                 continue
         return None
 
-    def start(self) -> bool:
+    def start(self) -> str | None:
+        """Start the process.
+
+        Returns:
+            None on success, or an error message string on failure.
+        """
         logger.info("Starting [%s]: [%s]", self.name, self.path)
         if not os.path.exists(self.path):
-            logger.error("Path does not exist: %s", self.path)
-            return False
+            err = f"Path does not exist: {self.path}"
+            logger.error(err)
+            return err
 
         folder = str(Path(self.path).parent)
         try:
@@ -63,10 +67,10 @@ class ManagedProcess:
                 creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
             )
             logger.info("[%s] started", self.name)
-            return True
+            return None
         except Exception as e:
             logger.error("subprocess.Popen failed: %s", e)
-            return False
+            return str(e)
 
     def stop(self) -> bool:
         logger.info("Stopping [%s]: %s", self.name, self.process_name)
@@ -94,12 +98,6 @@ class AppProcessManager:
             if profile.launcher_path
             else None
         )
-        self._last_error = ""
-        self._stop_event: threading.Event | None = None
-
-    @property
-    def last_error(self) -> str:
-        return self._last_error
 
     @property
     def is_app_running(self) -> bool:
@@ -128,38 +126,6 @@ class AppProcessManager:
                 continue
         return None
 
-    def launch(self, stop_event: threading.Event | None = None) -> bool:
-        """Launch game directly or through its launcher."""
-        self._stop_event = stop_event
-        self._last_error = ""
-
-        if self.game.is_running():
-            logger.info("Game is already running")
-            return True
-
-        starter = self.launcher or self.game
-        if not starter.is_running() and not starter.start():
-            self._last_error = f"{starter.name} failed to start"
-            return False
-
-        if starter is self.game:
-            if self._wait_until(self.game.is_running, timeout=self.timeout):
-                return True
-            self._last_error = "Timeout waiting for game process"
-            return False
-
-        logger.info("Waiting for game process...")
-        if self._wait_until(self.game.is_running, timeout=self.timeout):
-            return True
-
-        self._last_error = "Timeout waiting for game process"
-        logger.error(self._last_error)
-        return False
-
-    def app_start(self, stop_event: threading.Event | None = None) -> bool:
-        """Backward-compatible alias for launch()."""
-        return self.launch(stop_event=stop_event)
-
     def stop_app(self) -> bool:
         return self.game.stop()
 
@@ -181,14 +147,3 @@ class AppProcessManager:
     @property
     def launcher_path(self) -> str | None:
         return self.profile.launcher_path
-
-    def _wait_until(self, condition, timeout: int, period: float = 1.0) -> bool:
-        end_time = time.time() + timeout
-        while time.time() < end_time:
-            if self._stop_event and self._stop_event.is_set():
-                self._last_error = "Cancelled"
-                return False
-            if condition():
-                return True
-            time.sleep(period)
-        return False
