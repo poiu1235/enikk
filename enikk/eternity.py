@@ -106,7 +106,7 @@ class Eternity:
         *,
         model: str | None = None,
         system_message: str | None = None,
-        max_iterations: int = 90,
+        max_iterations: int = 900,
         session_id: str | None = None,
     ) -> str:
         """Create a session and start the agent in a background thread.
