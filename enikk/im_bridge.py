@@ -48,6 +48,7 @@ class IMBridge:
         self._chat_sessions: dict[str, str] = {}  # chat_id → session_id
         self._active_streams: dict[str, asyncio.Task] = {}  # chat_id → stream task
         self._tool_notify: dict[str, bool] = {}  # chat_id → enabled
+        self._image_notify: dict[str, bool] = {}  # chat_id → enabled
         self._load_state()
 
     def _load_state(self) -> None:
@@ -56,8 +57,9 @@ class IMBridge:
                 data = json.loads(_STATE_FILE.read_text(encoding="utf-8"))
                 self._chat_sessions = data.get("chat_sessions", {})
                 self._tool_notify = data.get("tool_notify", {})
-                logger.info("IM state loaded: %d sessions, %d tool_notify",
-                          len(self._chat_sessions), len(self._tool_notify))
+                self._image_notify = data.get("image_notify", {})
+                logger.info("IM state loaded: %d sessions, %d tool_notify, %d image_notify",
+                          len(self._chat_sessions), len(self._tool_notify), len(self._image_notify))
         except Exception as e:
             logger.warning("Failed to load IM state: %s", e)
 
@@ -66,6 +68,7 @@ class IMBridge:
             data = {
                 "chat_sessions": self._chat_sessions,
                 "tool_notify": self._tool_notify,
+                "image_notify": self._image_notify,
             }
             _STATE_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
             logger.debug("IM state saved")
@@ -221,17 +224,25 @@ class IMBridge:
             state = "🔔 已开启" if not current else "🔕 已关闭"
             return f"🔧 工具调用通知: {state}"
 
+        elif cmd == "images":
+            current = self._image_notify.get(chat_id, True)
+            self._image_notify[chat_id] = not current
+            self._save_state()
+            state = "🔔 已开启" if not current else "🔕 已关闭"
+            return f"📷 图片发送: {state}"
+
         elif cmd == "help":
             return (
                 "🤖 **Enikk 助手**\n\n"
                 "🆕 /new [提示词] - 新建会话\n"
                 "🛑 /stop - 停止当前会话\n"
                 "🔧 /tools - 切换工具调用通知\n"
+                "📷 /images - 切换图片发送\n"
                 "ℹ️ /help - 显示帮助"
             )
 
         else:
-            return f"⚠️ 未知命令: /{cmd}\n\n可用: /new, /stop, /tools, /help"
+            return f"⚠️ 未知命令: /{cmd}\n\n可用: /new, /stop, /tools, /images, /help"
 
     def _get_chat_id(self, event) -> Optional[str]:
         """Extract chat identifier from message event (DM only)."""
@@ -245,17 +256,24 @@ class IMBridge:
         return getattr(source, "chat_id", None)
 
     async def _stream_response(self, session_id: str, chat_id: str) -> None:
-        """Stream agent response to IM platform via GatewayStreamConsumer."""
-        from gateway.stream_consumer import GatewayStreamConsumer, StreamConsumerConfig
+        """Stream agent response to IM platform.
 
+        Accumulates deltas in a buffer, flushes as complete messages at event
+        boundaries (tool_call, tool_result, session) — matching how
+        frontend.html groups parts. Avoids stream-edit and message splitting.
+        """
         adapter = self._adapter
+        if not adapter:
+            return
 
-        consumer = GatewayStreamConsumer(
-            adapter=adapter,
-            chat_id=chat_id,
-            config=StreamConsumerConfig(chat_type="dm", cursor=""),
-        )
-        consumer_task = asyncio.create_task(consumer.run())
+        buffer: list[str] = []
+
+        async def flush():
+            nonlocal buffer
+            text = "".join(buffer).strip()
+            buffer.clear()
+            if text:
+                await adapter.send(chat_id, text)
 
         try:
             async for event in self.eternity.get_session_stream(session_id):
@@ -266,82 +284,63 @@ class IMBridge:
                     text = data.get("text", "")
                     if text:
                         logger.debug("IM [%s] delta: %r", chat_id, text)
-                        consumer.on_delta(text)
+                        buffer.append(text)
 
                 elif event_type == EVT_TOOL_CALL:
+                    name = data.get("name", "")
+                    args = data.get("args", {})
+                    logger.debug("IM [%s] tool_call: %s", chat_id, name)
+                    await flush()
                     if self._tool_notify.get(chat_id, True):
-                        name = data.get("name", "")
-                        args = data.get("args", {})
                         args_str = str(args)[:80] if args else ""
                         hint = f"`{name}({args_str})`" if args_str else f"`{name}()`"
-                        consumer.on_delta(None)
-                        consumer.on_delta(f"**[{event_type}]** 🔧 {hint}\n")
-                    logger.debug("IM [%s] tool_call: %s", chat_id, data.get("name", ""))
+                        msg = f"🔧 {hint}"
+                        if len(msg) > 200:
+                            msg = msg[:197] + "..."
+                        await adapter.send(chat_id, msg)
 
                 elif event_type == EVT_TOOL_RESULT:
                     name = data.get("name", "")
                     logger.debug("IM [%s] tool_result: %s", chat_id, name)
-                    img_path = _extract_image_path(data.get("result"))
-                    if img_path and adapter:
-                        consumer.on_delta(None)
-                        consumer.on_delta(f"**[{event_type}]** 📷 {name}\n")
-                        logger.debug("IM [%s] sending image: %s", chat_id, img_path)
-                        try:
-                            await adapter.send_image(chat_id, img_path)
-                        except Exception:
-                            logger.warning("IM [%s] send_image failed for %s", chat_id, img_path)
+                    if self._image_notify.get(chat_id, True):
+                        img_path = _extract_image_path(data.get("result"))
+                        if img_path:
+                            logger.debug("IM [%s] sending image: %s", chat_id, img_path)
+                            try:
+                                await adapter.send_image(chat_id, img_path)
+                            except Exception:
+                                logger.warning("IM [%s] send_image failed for %s", chat_id, img_path)
 
                 elif event_type == EVT_REASONING:
-                    text = data.get("text", "")
-                    if text:
-                        consumer.on_delta(None)
-                        consumer.on_delta(f"**[{event_type}]** 💭 {text[:100]}...\n")
-                    logger.debug("IM [%s] reasoning: %r", chat_id, text[:50])
+                    logger.debug("IM [%s] reasoning: %r", chat_id, data.get("text", "")[:50])
 
                 elif event_type == EVT_STEP_CONTEXT:
-                    step = data.get("step", "")
-                    current = data.get("current", 0)
-                    limit = data.get("limit", 0)
-                    pct = data.get("pct", 0)
-                    consumer.on_delta(None)
-                    consumer.on_delta(f"**[{event_type}]** Step {step}: {current}/{limit} ({pct}%)\n")
                     logger.debug("IM [%s] step_context: %s", chat_id, data)
 
                 elif event_type == EVT_ERROR:
                     msg = data.get("message", "Unknown error")
                     logger.warning("IM [%s] error: %s", chat_id, msg)
-                    consumer.on_delta(None)
-                    consumer.on_delta(f"**[{event_type}]** ❌ {msg}\n")
+                    await flush()
+                    await adapter.send(chat_id, f"❌ {msg}")
 
                 elif event_type == EVT_SESSION:
                     status = data.get("status")
                     if status in ("completed", "stopped", "error"):
-                        # Send final_response if present and not already fully streamed
-                        final_response = data.get("final_response")
-                        if final_response and not consumer.already_sent:
-                            logger.debug("IM [%s] sending final_response", chat_id)
-                            consumer.on_delta(None)
-                            consumer.on_delta(f"**[{event_type}]** ✅\n")
-                            consumer.on_delta(final_response)
-                        else:
-                            consumer.on_delta(None)
-                            consumer.on_delta(f"**[{event_type}]** {status}\n")
+                        await flush()
                         logger.info("IM [%s] session %s", chat_id, status)
                         break
+
+            # Flush any remaining buffer after stream ends
+            await flush()
+
+        except asyncio.CancelledError:
+            logger.debug("IM [%s] stream cancelled", chat_id)
+        except Exception:
+            logger.warning("IM [%s] stream failed", chat_id, exc_info=True)
         finally:
-            consumer.finish()
-            try:
-                await consumer_task
-            except asyncio.CancelledError:
-                pass
-            except Exception:
-                logger.warning("IM [%s] stream consumer failed", chat_id, exc_info=True)
-            # Safe cleanup: only remove if this task is still the tracked one
             current_task = asyncio.current_task()
             if self._active_streams.get(chat_id) is current_task:
                 self._active_streams.pop(chat_id, None)
-
-        logger.info("IM [%s] stream finished (sent=%s)", chat_id, consumer.already_sent)
 
     async def stop(self) -> None:
         """Disconnect the adapter."""
