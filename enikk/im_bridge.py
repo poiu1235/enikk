@@ -148,6 +148,8 @@ class IMBridge:
                 if not active_task or active_task.done():
                     need_stream = True
         else:
+            if self._adapter:
+                await self._adapter.send(chat_id, "👋 新会话已创建。发送 /help 查看所有命令")
             session_id = self.eternity.create_session(task=text)
             self._chat_sessions[chat_id] = session_id
             self._save_state()
@@ -174,6 +176,8 @@ class IMBridge:
             active_task = self._active_streams.get(chat_id)
             if active_task and not active_task.done():
                 active_task.cancel()
+            if self._adapter:
+                await self._adapter.send(chat_id, "👋 新会话已创建。发送 /help 查看所有命令")
             session_id = self.eternity.create_session(task=args or "New session")
             self._chat_sessions[chat_id] = session_id
             self._save_state()
