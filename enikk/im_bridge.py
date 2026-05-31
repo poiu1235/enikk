@@ -6,7 +6,7 @@ import json
 import logging
 from typing import Optional
 
-from .config import Config, _enikk_home
+from .config import Config, enikk_home
 from .eternity import Eternity
 from .controller import IMAGE_PATH_KEY, SOM_IMAGE_PATH_KEY
 from .events import EVT_DELTA, EVT_TOOL_CALL, EVT_TOOL_RESULT, EVT_REASONING, EVT_STEP_CONTEXT, EVT_ERROR, EVT_SESSION
@@ -31,7 +31,7 @@ def _extract_image_path(result) -> Optional[str]:
     return None
 
 
-_STATE_FILE = _enikk_home() / "im_state.json"
+_STATE_FILE = enikk_home() / "im_state.json"
 
 
 class IMBridge:

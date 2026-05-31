@@ -10,14 +10,12 @@ import threading
 from pathlib import Path
 
 from . import __version__
+from .config import enikk_home
 
 # Must be set BEFORE importing enikk modules (which import hermes at module level)
-if os.name == "nt":
-    _enikk_home = Path(os.environ["LOCALAPPDATA"]) / "Enikk"
-else:
-    _enikk_home = Path.home() / ".enikk"
-_enikk_home.mkdir(parents=True, exist_ok=True)
-os.environ["HERMES_HOME"] = str(_enikk_home)
+_enikk_home_path = enikk_home()
+_enikk_home_path.mkdir(parents=True, exist_ok=True)
+os.environ["HERMES_HOME"] = str(_enikk_home_path)
 os.environ["HERMES_BUNDLED_SKILLS"] = str(Path(__file__).parent / "skills")
 
 
@@ -72,7 +70,7 @@ def cmd_daemon(args):
     )
 
     # Also write logs to home/logs/enikk.log (rotate 5 files × 10MB)
-    log_dir = _enikk_home / "logs"
+    log_dir = _enikk_home_path / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
     file_handler = logging.handlers.RotatingFileHandler(
         log_dir / "enikk.log",

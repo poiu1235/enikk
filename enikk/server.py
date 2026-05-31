@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from .config import enikk_home
 from .eternity import Eternity
 
 logger = logging.getLogger(__name__)
@@ -110,7 +111,7 @@ def create_app(eternity: Eternity) -> FastAPI:
         import subprocess
         import platform
 
-        base_dir = Path.home() / ".enikk"
+        base_dir = enikk_home()
         dirs = {
             "home": base_dir,
             "logs": base_dir / "logs",

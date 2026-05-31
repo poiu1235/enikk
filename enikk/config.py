@@ -12,14 +12,14 @@ import yaml
 logger = logging.getLogger(__name__)
 
 
-def _enikk_home() -> Path:
+def enikk_home() -> Path:
     """Enikk home directory for config/data storage."""
     if os.name == "nt":
         return Path(os.environ["LOCALAPPDATA"]) / "Enikk"
     return Path.home() / ".enikk"
 
 
-CUSTOM_APPS_FILE = _enikk_home() / "custom_apps.json"
+CUSTOM_APPS_FILE = enikk_home() / "custom_apps.json"
 
 
 @dataclass
