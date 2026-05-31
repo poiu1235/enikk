@@ -8,27 +8,10 @@ from typing import Optional
 
 from .config import Config, enikk_home
 from .eternity import Eternity
-from .controller import IMAGE_PATH_KEY, SOM_IMAGE_PATH_KEY
+from .controller import extract_image_path
 from .events import EVT_DELTA, EVT_TOOL_CALL, EVT_TOOL_RESULT, EVT_REASONING, EVT_STEP_CONTEXT, EVT_ERROR, EVT_SESSION
 
 logger = logging.getLogger(__name__)
-
-
-def _extract_image_path(result) -> Optional[str]:
-    """Extract local image path from a tool result (dict or JSON string)."""
-    obj = None
-    if isinstance(result, dict):
-        obj = result
-    elif isinstance(result, str):
-        try:
-            obj = json.loads(result)
-        except (ValueError, TypeError):
-            pass
-    if obj and isinstance(obj, dict):
-        path = obj.get(SOM_IMAGE_PATH_KEY) or obj.get(IMAGE_PATH_KEY)
-        if path:
-            return path
-    return None
 
 
 _STATE_FILE = enikk_home() / "im_state.json"
@@ -303,7 +286,7 @@ class IMBridge:
                     name = data.get("name", "")
                     logger.debug("IM [%s] tool_result: %s", chat_id, name)
                     if self._image_notify.get(chat_id, True):
-                        img_path = _extract_image_path(data.get("result"))
+                        img_path = extract_image_path(data.get("result"))
                         if img_path:
                             logger.debug("IM [%s] sending image: %s", chat_id, img_path)
                             try:

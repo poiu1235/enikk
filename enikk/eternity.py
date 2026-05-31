@@ -16,27 +16,10 @@ from hermes_state import SessionDB
 
 from .prompts import DEFAULT_SYSTEM_PROMPT
 from .config import Config
-from .controller import AppController, IMAGE_PATH_KEY, SOM_IMAGE_PATH_KEY
+from .controller import AppController, extract_image_path
 from .events import EVT_DELTA, EVT_TOOL_CALL, EVT_TOOL_RESULT, EVT_REASONING, EVT_STEP_CONTEXT, EVT_ERROR, EVT_SESSION
 
 logger = logging.getLogger(__name__)
-
-
-def _extract_image_url(result) -> str | None:
-    """Extract image URL from a tool result (dict or JSON string)."""
-    obj = None
-    if isinstance(result, dict):
-        obj = result
-    elif isinstance(result, str):
-        try:
-            obj = json.loads(result)
-        except (json.JSONDecodeError, TypeError):
-            pass
-    if obj and isinstance(obj, dict):
-        path = obj.get(SOM_IMAGE_PATH_KEY) or obj.get(IMAGE_PATH_KEY)
-        if path:
-            return "/api/images?path=" + quote(path, safe="")
-    return None
 
 
 @dataclass
@@ -145,9 +128,9 @@ class Eternity:
         def _publish_tool_result(tc_id: str, name: str, result) -> None:
             """Publish tool_result event, enriching with imageUrl if result contains image path."""
             data = {"call_id": tc_id, "name": name, "result": result}
-            img_url = _extract_image_url(result)
-            if img_url:
-                data["imageUrl"] = img_url
+            img_path = extract_image_path(result)
+            if img_path:
+                data["imageUrl"] = f"/api/images?path={quote(img_path, safe='')}"
             _publish(EVT_TOOL_RESULT, data)
 
         mc = self.config.model
@@ -331,9 +314,9 @@ class Eternity:
 
         for m in result:
             if m.get("role") == "tool" and m.get("content"):
-                img_url = _extract_image_url(m["content"])
-                if img_url:
-                    m["imageUrl"] = img_url
+                img_path = extract_image_path(m["content"])
+                if img_path:
+                    m["imageUrl"] = f"/api/images?path={quote(img_path, safe='')}"
 
         return {"messages": result, "has_more": has_more}
 

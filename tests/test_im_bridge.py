@@ -14,7 +14,8 @@ from enikk.events import (
     EVT_TOOL_CALL,
     EVT_TOOL_RESULT,
 )
-from enikk.im_bridge import IMBridge, _extract_image_path
+from enikk.im_bridge import IMBridge
+from enikk.controller import extract_image_path
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────
@@ -58,51 +59,51 @@ def _mock_state_file(tmp_path):
         yield
 
 
-# ── Tests: _extract_image_path ──────────────────────────────────────────
+# ── Tests: extract_image_path ──────────────────────────────────────────
 
 class TestExtractImagePath:
-    """Test _extract_image_path() pure function."""
+    """Test extract_image_path() pure function."""
 
     def test_dict_with_image_path(self):
         result = {"image_path": "/tmp/test.png"}
-        assert _extract_image_path(result) == "/tmp/test.png"
+        assert extract_image_path(result) == "/tmp/test.png"
 
     def test_dict_with_som_image_path(self):
         result = {"SoM_image_path": "/tmp/som.png"}
-        assert _extract_image_path(result) == "/tmp/som.png"
+        assert extract_image_path(result) == "/tmp/som.png"
 
     def test_dict_som_takes_precedence(self):
         result = {"SoM_image_path": "/tmp/som.png", "image_path": "/tmp/normal.png"}
-        assert _extract_image_path(result) == "/tmp/som.png"
+        assert extract_image_path(result) == "/tmp/som.png"
 
     def test_dict_without_image_keys(self):
         result = {"other_key": "value"}
-        assert _extract_image_path(result) is None
+        assert extract_image_path(result) is None
 
     def test_json_string_with_image_path(self):
         result = json.dumps({"image_path": "/tmp/test.png"})
-        assert _extract_image_path(result) == "/tmp/test.png"
+        assert extract_image_path(result) == "/tmp/test.png"
 
     def test_json_string_with_som_image_path(self):
         result = json.dumps({"SoM_image_path": "/tmp/som.png"})
-        assert _extract_image_path(result) == "/tmp/som.png"
+        assert extract_image_path(result) == "/tmp/som.png"
 
     def test_invalid_json_string(self):
         result = "not valid json"
-        assert _extract_image_path(result) is None
+        assert extract_image_path(result) is None
 
     def test_none_input(self):
-        assert _extract_image_path(None) is None
+        assert extract_image_path(None) is None
 
     def test_empty_dict(self):
-        assert _extract_image_path({}) is None
+        assert extract_image_path({}) is None
 
     def test_empty_string(self):
-        assert _extract_image_path("") is None
+        assert extract_image_path("") is None
 
     def test_non_dict_non_string(self):
-        assert _extract_image_path(123) is None
-        assert _extract_image_path([]) is None
+        assert extract_image_path(123) is None
+        assert extract_image_path([]) is None
 
 
 # ── Tests: _get_chat_id ─────────────────────────────────────────────────
