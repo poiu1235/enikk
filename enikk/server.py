@@ -53,8 +53,11 @@ def create_app(eternity: Eternity) -> FastAPI:
 
     @app.post("/api/sessions/{session_id}/steer")
     def steer_session(session_id: str, req: SteerRequest):
-        if not eternity.steer_session(session_id, req.message):
-            raise HTTPException(status_code=404, detail="Session not found")
+        try:
+            if not eternity.steer_session(session_id, req.message):
+                raise HTTPException(status_code=404, detail="Session not found")
+        except RuntimeError as e:
+            raise HTTPException(status_code=400, detail=str(e))
         return {"status": "steered"}
 
     @app.post("/api/sessions/{session_id}/stop")

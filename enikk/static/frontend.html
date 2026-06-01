@@ -84,6 +84,15 @@
     .msg-content th { background: #e8eaed; }
     .msg-content a { color: #10a37f; text-decoration: underline; }
 
+    /* Error toast */
+    .error-toast {
+      animation: slideUp 0.3s ease-out;
+    }
+    @keyframes slideUp {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
     /* Image in messages */
     .msg-content img, .msg-img {
       max-width: 100%; border-radius: 10px;
@@ -467,6 +476,21 @@
     </svg>
   </button>
 
+  <!-- Error Toast -->
+  <div x-show="errorMessage" x-transition class="px-4 pb-2 max-w-4xl mx-auto w-full">
+    <div class="error-toast bg-red-50 border border-red-200 rounded-lg px-4 py-3 flex items-start gap-3">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" class="flex-shrink-0 mt-0.5">
+        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+      <div class="flex-1 text-sm text-red-800" x-text="errorMessage"></div>
+      <button @click="errorMessage = ''" class="text-red-400 hover:text-red-600 flex-shrink-0">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 6L6 18M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
   <!-- Input Area -->
   <div class="px-4 pb-4 pt-2 max-w-4xl mx-auto w-full">
     <div class="input-area px-4 pt-3 pb-3">
@@ -515,6 +539,8 @@ function chatApp() {
     inputText: '',
     isTyping: false,
     _streamingMsg: null,
+    errorMessage: '',
+    _errorTimer: null,
 
     showThinking: true,
     thinkingExpanded: true,
@@ -851,12 +877,7 @@ function chatApp() {
           }
         } catch (e) {
           console.error('Failed to steer:', e);
-          session.messages.push({
-            role: 'assistant',
-            content: `**Error:** ${e.message}`,
-            images: []
-          });
-          this.$nextTick(() => this.scrollToBottom());
+          this.showError(e.message);
         }
         return;
       }
@@ -891,18 +912,10 @@ function chatApp() {
           history.pushState({ sessionId: session_id }, '', `?session=${session_id}`);
         } catch (e) {
           console.error('Failed to create session:', e);
-          this.sessions.unshift({
-            id: 'error-' + Date.now(),
-            title: text.slice(0, 28),
-            createdAt: new Date(),
-            messages: [
-              { role: 'user', content: text, images: [] },
-              { role: 'assistant', content: `**Error:** ${e.message}`, images: [] }
-            ],
-            _loaded: true,
-          });
-          this.activeSessionId = this.sessions[0].id;
+          this.showError(e.message);
+          this.inputText = text;
           this._streaming = false;
+          this.$nextTick(() => this.autoResize(this.$refs.inputRef));
           return;
         }
       } else {
@@ -926,12 +939,7 @@ function chatApp() {
           }
         } catch (e) {
           console.error('Failed to steer:', e);
-          session.messages.push({
-            role: 'assistant',
-            content: `**Error:** ${e.message}`,
-            images: []
-          });
-          this.$nextTick(() => this.scrollToBottom());
+          this.showError(e.message);
           return;
         }
       }
@@ -1144,6 +1152,14 @@ function chatApp() {
     autoResize(el) {
       el.style.height = '28px';
       el.style.height = Math.min(el.scrollHeight, 192) + 'px';
+    },
+
+    showError(message) {
+      this.errorMessage = message;
+      if (this._errorTimer) clearTimeout(this._errorTimer);
+      this._errorTimer = setTimeout(() => {
+        this.errorMessage = '';
+      }, 8000);
     },
   };
 }
