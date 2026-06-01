@@ -273,13 +273,11 @@ class IMBridge:
 
         elif cmd == "help":
             return (
-                "🤖 **Enikk 助手**\n\n"
-                "🆕 /new [提示词] - 新建会话\n"
-                "🛑 /stop - ⚠️ 紧急停止当前会话\n"
-                "🔧 /tools - 切换工具调用通知\n"
-                "📷 /images - 切换图片发送\n"
-                "📊 /progress - 切换进度回显\n"
-                "ℹ️ /help - 显示帮助"
+                "/new [提示词] - 新建会话\n"
+                "/stop - 停止当前会话\n"
+                "/tools - 工具通知开关\n"
+                "/images - 图片发送开关\n"
+                "/progress - 进度回显开关"
             )
 
         else:

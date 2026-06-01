@@ -150,10 +150,11 @@ class TestHandleCommand:
     @pytest.mark.asyncio
     async def test_help_command(self, bridge):
         result = await bridge._handle_command("/help", "chat-1")
-        assert "Enikk" in result
         assert "/new" in result
         assert "/stop" in result
-        assert "紧急" in result
+        assert "/tools" in result
+        assert "/images" in result
+        assert "/progress" in result
 
     @pytest.mark.asyncio
     async def test_unknown_command(self, bridge):
