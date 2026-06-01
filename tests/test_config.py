@@ -7,7 +7,6 @@ from enikk.config import (
     AppConfig,
     Config,
     ModelConfig,
-    ServerConfig,
     WorkspaceConfig,
 )
 
@@ -41,13 +40,6 @@ class TestAppConfig:
     def test_launcher_app_name(self):
         ac = AppConfig(launcher_path=r"C:\foo\launcher.exe")
         assert ac.launcher_exe_name == "launcher.exe"
-
-
-class TestServerConfig:
-    def test_defaults(self):
-        sc = ServerConfig()
-        assert sc.host == "127.0.0.1"
-        assert sc.port == 18931
 
 
 class TestModelConfig:
@@ -103,8 +95,6 @@ workspace:
         assert ac.app_path == r"D:\nikke\game.exe"
         assert ac.launcher_path == r"D:\nikke\launcher.exe"
         assert ac.launch_timeout == 60
-        assert cfg.server.host == "0.0.0.0"
-        assert cfg.server.port == 8080
         assert cfg.model.default == "gpt-4"
         assert cfg.model.provider == "openai"
         assert cfg.model.api_key == "sk-test"
@@ -145,7 +135,6 @@ server:
             os.unlink(path)
 
         assert cfg.apps["nikke"].app_path == r"C:\g.exe"
-        assert cfg.server.host == "127.0.0.1"
 
     def test_empty_data(self):
         path = _write_yaml("")
@@ -161,7 +150,6 @@ server:
 
 def test_config_defaults():
     cfg = Config()
-    assert isinstance(cfg.server, ServerConfig)
     assert isinstance(cfg.model, ModelConfig)
     assert isinstance(cfg.workspace, WorkspaceConfig)
     assert cfg.apps == {}

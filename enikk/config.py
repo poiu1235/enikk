@@ -45,12 +45,6 @@ class AppConfig:
 
 
 @dataclass
-class ServerConfig:
-    host: str = "127.0.0.1"
-    port: int = 18931  # HTTP API
-
-
-@dataclass
 class ModelConfig:
     default: str = ""
     provider: str = ""
@@ -61,8 +55,8 @@ class ModelConfig:
 
 @dataclass
 class WorkspaceConfig:
-    screenshot_dir: str = str(Path(__file__).resolve().parent.parent / "screenshots")
-    weights_dir: str = str(Path(__file__).resolve().parent.parent / "weights")
+    screenshot_dir: str = str(enikk_home() / "screenshots")
+    weights_dir: str = str(enikk_home() / "weights")
     save_screenshots: bool = False
     screenshot_max_dim: int = 1366
 
@@ -92,11 +86,14 @@ class IMConfig:
 @dataclass
 class Config:
     apps: dict[str, AppConfig] = field(default_factory=dict)
-    server: ServerConfig = field(default_factory=ServerConfig)
     model: ModelConfig = field(default_factory=ModelConfig)
     workspace: WorkspaceConfig = field(default_factory=WorkspaceConfig)
     im: IMConfig = field(default_factory=IMConfig)
     log_level: str = "INFO"
+
+    @property
+    def config_path(self) -> Path:
+        return enikk_home() / "config.yaml"
 
     # ── Helpers ───────────────────────────────────────────────────────
 
@@ -170,14 +167,8 @@ class Config:
                     gd["app_path"] = gd.pop("game_path")
                 cfg.apps[name] = AppConfig(**{
                     k: v for k, v in gd.items()
-                    if k in valid_fields
+                    if k in valid_fields and k != "name"
                 }, name=name)
-        if "server" in data:
-            sd = data["server"]
-            cfg.server = ServerConfig(**{
-                k: v for k, v in sd.items()
-                if k in {f.name for f in fields(ServerConfig)}
-            })
         if "model" in data:
             md = data["model"]
             cfg.model = ModelConfig(**{
@@ -203,3 +194,49 @@ class Config:
         if "log_level" in data:
             cfg.log_level = data["log_level"]
         return cfg
+
+    def to_dict(self) -> dict:
+        """Serialize config to dictionary for API responses."""
+        def dc_to_dict(obj):
+            if hasattr(obj, "__dataclass_fields__"):
+                return {k: dc_to_dict(v) for k, v in vars(obj).items() if not k.startswith("_")}
+            if isinstance(obj, dict):
+                return {k: dc_to_dict(v) for k, v in obj.items()}
+            return obj
+
+        return dc_to_dict(self)
+
+    def update_from_dict(self, data: dict) -> None:
+        """Update config from dictionary (API request)."""
+        if "model" in data:
+            for k, v in data["model"].items():
+                if hasattr(self.model, k):
+                    setattr(self.model, k, v)
+        if "workspace" in data:
+            for k, v in data["workspace"].items():
+                if hasattr(self.workspace, k):
+                    setattr(self.workspace, k, v)
+        if "log_level" in data:
+            self.log_level = data["log_level"]
+        if "im" in data and "platforms" in data["im"]:
+            for name, pdata in data["im"]["platforms"].items():
+                if name not in self.im.platforms:
+                    self.im.platforms[name] = PlatformSettings()
+                for k, v in pdata.items():
+                    if hasattr(self.im.platforms[name], k):
+                        setattr(self.im.platforms[name], k, v)
+
+    def save(self) -> None:
+        """Save config to YAML file."""
+        data = self.to_dict()
+        # Remove empty/default sections to keep config clean
+        if not data.get("apps"):
+            data.pop("apps", None)
+        if not data.get("im", {}).get("platforms"):
+            data.pop("im", None)
+
+        path = self.config_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            yaml.dump(data, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+        logger.info("Config saved to %s", path)

@@ -355,7 +355,7 @@ class TestOpenDir:
     def test_open_dir_missing_name(self, client):
         c, _ = client
         response = c.get("/api/open_dir")
-        assert response.status_code == 422
+        assert response.status_code == 400
 
 
 # ── Tests: Static files ─────────────────────────────────────────────────

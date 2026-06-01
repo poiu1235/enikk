@@ -1,8 +1,11 @@
 """FastAPI HTTP server for Enikk."""
 import json
 import logging
+import threading
+import time
 from pathlib import Path
 
+import uvicorn
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -12,6 +15,38 @@ from .config import enikk_home
 from .eternity import Eternity
 
 logger = logging.getLogger(__name__)
+
+
+def start_server(
+    app: FastAPI,
+    host: str = "127.0.0.1",
+    port: int = 0,
+    timeout_graceful_shutdown: int = 2,
+) -> tuple[threading.Thread, int]:
+    """Start uvicorn in a background thread and return (thread, actual_port).
+
+    When port=0 the OS assigns a random available port. This function blocks
+    until the server is ready before returning.
+    """
+    server = uvicorn.Server(
+        config=uvicorn.Config(
+            app=app,
+            host=host,
+            port=port,
+            log_level="info",
+            timeout_graceful_shutdown=timeout_graceful_shutdown,
+            log_config=None,
+        )
+    )
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+
+    while not server.started:
+        time.sleep(0.1)
+
+    actual_port = server.servers[0].sockets[0].getsockname()[1]
+    return thread, actual_port
+
 
 
 def create_app(eternity: Eternity) -> FastAPI:
@@ -111,23 +146,27 @@ def create_app(eternity: Eternity) -> FastAPI:
         return FileResponse(str(p))
 
     @app.get("/api/open_dir")
-    def open_dir(name: str = Query(..., description="Directory name: 'home' or 'logs'")):
-        """Open an Enikk directory in file explorer."""
+    def open_dir(name: str = Query(None, description="Directory name: 'home' or 'logs'"), path: str = Query(None, description="Arbitrary directory path to open")):
+        """Open a directory in file explorer."""
         import os
         import subprocess
         import platform
 
-        base_dir = enikk_home()
-        dirs = {
-            "home": base_dir,
-            "logs": base_dir / "logs",
-        }
-
-        target = dirs.get(name)
-        if not target:
-            raise HTTPException(status_code=400, detail=f"Unknown directory: {name}. Available: {list(dirs.keys())}")
-
-        target.mkdir(parents=True, exist_ok=True)
+        if path:
+            target = Path(path).resolve()
+            if not target.is_dir():
+                raise HTTPException(status_code=404, detail=f"Directory not found: {path}")
+        else:
+            base_dir = enikk_home()
+            dirs = {
+                "home": base_dir,
+                "logs": base_dir / "logs",
+            }
+            result = dirs.get(name)
+            if not result:
+                raise HTTPException(status_code=400, detail=f"Unknown directory: {name}. Available: {list(dirs.keys())}")
+            target = result
+            target.mkdir(parents=True, exist_ok=True)
 
         if platform.system() == "Windows":
             os.startfile(str(target))
@@ -137,5 +176,20 @@ def create_app(eternity: Eternity) -> FastAPI:
             subprocess.run(["xdg-open", str(target)])
 
         return {"status": "opened", "path": str(target)}
+
+    @app.get("/api/config")
+    def get_config():
+        """Get current configuration."""
+        return eternity.config.to_dict()
+
+    @app.put("/api/config")
+    def update_config(data: dict):
+        """Update configuration."""
+        try:
+            eternity.config.update_from_dict(data)
+            eternity.config.save()
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        return {"status": "updated"}
 
     return app

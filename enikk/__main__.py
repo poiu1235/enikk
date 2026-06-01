@@ -52,12 +52,11 @@ async def _run_im_bridge(im_bridge) -> None:
 def main():
     """Start the Enikk daemon process."""
     # Lazy imports: keep --help fast by deferring heavy deps until daemon starts.
-    import uvicorn
-    import webview
 
     from .config import Config
     from .eternity import Eternity
-    from .server import create_app
+    from .server import create_app, start_server
+    from .webview_api import start_webview
 
     if sys.platform == 'win32':
         sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
@@ -94,7 +93,9 @@ def main():
         cfg = Config()
         logger.info("No config.yaml found at %s, using defaults", config_path)
 
-    logger.info("Dashboard: http://%s:%s/", cfg.server.host, cfg.server.port)
+    # Ensure workspace directories exist
+    Path(cfg.workspace.screenshot_dir).mkdir(parents=True, exist_ok=True)
+    Path(cfg.workspace.weights_dir).mkdir(parents=True, exist_ok=True)
 
     # Also write logs to home/logs/enikk.log (rotate 5 files × 10MB)
     log_dir = _enikk_home_path / "logs"
@@ -137,33 +138,24 @@ def main():
         logger.info("IM bridge started (%s)", platform_name)
 
     timeout = 2
-    logger.info("Starting API server on %s:%s", cfg.server.host, cfg.server.port)
+    server_host = "127.0.0.1"
+    logger.info("Starting API server on %s (random port)", server_host)
 
-    # Start uvicorn in background thread
-    uvicorn_thread = threading.Thread(
-        target=uvicorn.run,
-        kwargs={
-            "app": create_app(eternity),
-            "host": cfg.server.host,
-            "port": cfg.server.port,
-            "log_level": "info",
-            "timeout_graceful_shutdown": timeout,
-            "log_config": None,
-        },
-        daemon=True,
+    app = create_app(eternity)
+    _, actual_port = start_server(
+        app,
+        host=server_host,
+        timeout_graceful_shutdown=timeout,
     )
-    uvicorn_thread.start()
+    logger.info("API server started on http://%s:%s/", server_host, actual_port)
 
     # Open webview in main thread
     try:
-        webview.create_window(
-            "Enikk Dashboard",
-            url=f"http://{cfg.server.host}:{cfg.server.port}",
-            width=1280,
-            height=800,
-        )
         _icon = Path(__file__).parent / "static" / "enikk-logo.ico"
-        webview.start(icon=str(_icon) if _icon.exists() else None)
+        start_webview(
+            url=f"http://{server_host}:{actual_port}",
+            icon_path=_icon,
+        )
     except KeyboardInterrupt:
         logger.info("KeyboardInterrupt received")
     except Exception:
