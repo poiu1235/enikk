@@ -141,7 +141,7 @@ def main():
     server_host = "127.0.0.1"
     logger.info("Starting API server on %s (random port)", server_host)
 
-    app = create_app(eternity)
+    app = create_app(eternity, im_bridge=im_bridge)
     _, actual_port = start_server(
         app,
         host=server_host,

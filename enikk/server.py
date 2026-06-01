@@ -57,7 +57,7 @@ def start_server(
 
 
 
-def create_app(eternity: Eternity) -> FastAPI:
+def create_app(eternity: Eternity, im_bridge=None) -> FastAPI:
     app = FastAPI(
         title="Enikk API",
         description="Enikk: Self-improving GUI Agent.",
@@ -184,6 +184,21 @@ def create_app(eternity: Eternity) -> FastAPI:
             subprocess.run(["xdg-open", str(target)])
 
         return {"status": "opened", "path": str(target)}
+
+    @app.get("/api/im/status")
+    def im_status():
+        """Return IM bridge connection status."""
+        if im_bridge is None:
+            return {"enabled": False, "connected": False, "platform": None}
+        adapter = getattr(im_bridge, '_adapter', None)
+        connected = getattr(adapter, 'is_connected', False) if adapter else False
+        active = im_bridge.config.im.active_platform
+        platform_name = active[0] if active else None
+        return {
+            "enabled": True,
+            "connected": bool(connected),
+            "platform": platform_name,
+        }
 
     @app.get("/api/config")
     def get_config():

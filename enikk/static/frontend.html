@@ -429,6 +429,20 @@
       <div x-show="sessions.length === 0" class="text-center text-gray-400 text-xs mt-8">No conversations yet</div>
     </div>
 
+    <!-- IM Status -->
+    <div class="px-3 pb-2" x-show="imStatus.enabled">
+      <div class="flex items-center gap-2 px-2 py-1.5 text-xs rounded-lg"
+           :class="imStatus.connected ? 'text-green-700 bg-green-50' : 'text-red-700 bg-red-50'"
+           title="IM Bridge 连接状态">
+        <span class="w-2 h-2 rounded-full flex-shrink-0"
+              :class="imStatus.connected ? 'bg-green-500' : 'bg-red-500'"></span>
+        <span class="truncate">
+          <span x-text="imStatus.platform || 'IM'"></span>
+          <span x-text="imStatus.connected ? ' 已连接' : ' 未连接'"></span>
+        </span>
+      </div>
+    </div>
+
     <!-- User -->
     <div class="p-3 border-t border-border relative">
       <div class="flex items-center gap-3 px-2 py-2 rounded-xl transition-all">
@@ -694,7 +708,7 @@
         </button>
       </div>
     </div>
-    <p class="text-center text-gray-400 text-xs mt-2">Enikk can make mistakes. Verify important information.</p>
+    <p class="text-center text-gray-400 text-xs mt-2">发送 "/stop" 停止当前任务</p>
   </div>
 </div>
 
@@ -725,6 +739,7 @@ function chatApp() {
     configSaved: false,
     modelTesting: false,
     modelTestResult: '',
+    imStatus: { enabled: false, connected: false, platform: null },
     _nextUid: 1,  // unique ID counter for message parts
     _scrollTimer: null,
     _streamMsgVer: 0,  // version counter to force x-for re-evaluation on SSE events
@@ -732,6 +747,8 @@ function chatApp() {
 
     init() {
       this.fetchSessions();
+      this.fetchIMStatus();
+      this._imStatusTimer = setInterval(() => this.fetchIMStatus(), 10000);
       this.$nextTick(() => { this.initMarked(); });
       window.addEventListener('popstate', (e) => {
         const sessionId = e.state?.sessionId || new URLSearchParams(window.location.search).get('session');
@@ -739,6 +756,15 @@ function chatApp() {
           this.switchSession(sessionId);
         }
       });
+    },
+
+    async fetchIMStatus() {
+      try {
+        const resp = await fetch('/api/im/status');
+        if (resp.ok) this.imStatus = await resp.json();
+      } catch (e) {
+        // silent
+      }
     },
 
     async fetchSessions() {
