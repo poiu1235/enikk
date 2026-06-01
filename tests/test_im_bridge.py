@@ -1,6 +1,7 @@
 """Unit tests for enikk.im_bridge module."""
 from __future__ import annotations
 
+import asyncio
 import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
@@ -660,4 +661,135 @@ class TestStop:
     async def test_stop_no_adapter(self):
         bridge = IMBridge(_make_config(), _make_eternity())
         bridge._adapter = None
+        await bridge.stop()
+
+
+class TestHealthCheck:
+    """Tests for the health check reconnection logic."""
+
+    @pytest.mark.asyncio
+    async def test_health_check_reconnects_on_disconnect(self):
+        """When adapter.is_connected becomes False, health check should reconnect."""
+        bridge = IMBridge(_make_config(), _make_eternity())
+        mock_adapter = AsyncMock()
+        mock_adapter.disconnect = AsyncMock()
+        mock_adapter.connect = AsyncMock(return_value=True)
+        bridge._adapter = mock_adapter
+
+        # Simulate disconnected state
+        mock_adapter.is_connected = False
+
+        # Patch the loop to use short interval
+        async def short_health_check():
+            await asyncio.sleep(0.1)
+            if not bridge._adapter.is_connected:
+                await bridge._adapter.disconnect()
+                await bridge._adapter.connect()
+
+        bridge._health_check_task = asyncio.create_task(short_health_check())
+
+        # Wait for the check
+        await asyncio.sleep(0.3)
+
+        # Should have attempted reconnect
+        mock_adapter.disconnect.assert_called()
+        mock_adapter.connect.assert_called()
+
+        # Cleanup
+        await bridge.stop()
+
+    @pytest.mark.asyncio
+    async def test_health_check_no_action_when_connected(self):
+        """When adapter stays connected, health check should not reconnect."""
+        bridge = IMBridge(_make_config(), _make_eternity())
+        mock_adapter = AsyncMock()
+        mock_adapter.disconnect = AsyncMock()
+        mock_adapter.connect = AsyncMock(return_value=True)
+        bridge._adapter = mock_adapter
+
+        # Simulate connected state
+        mock_adapter.is_connected = True
+
+        # Patch the loop to use short interval
+        async def short_health_check():
+            await asyncio.sleep(0.1)
+            if not bridge._adapter.is_connected:
+                await bridge._adapter.disconnect()
+                await bridge._adapter.connect()
+
+        bridge._health_check_task = asyncio.create_task(short_health_check())
+
+        # Wait for the check
+        await asyncio.sleep(0.3)
+
+        # Should not have attempted reconnect
+        mock_adapter.disconnect.assert_not_called()
+        mock_adapter.connect.assert_not_called()
+
+        # Cleanup
+        await bridge.stop()
+
+    @pytest.mark.asyncio
+    async def test_health_check_retries_on_failure(self):
+        """When reconnect fails, health check should retry."""
+        bridge = IMBridge(_make_config(), _make_eternity())
+        mock_adapter = AsyncMock()
+        mock_adapter.disconnect = AsyncMock()
+        mock_adapter.connect = AsyncMock(side_effect=[False, True])  # Fail once, then succeed
+        bridge._adapter = mock_adapter
+
+        # Simulate disconnected state
+        mock_adapter.is_connected = False
+
+        # Patch the loop to retry twice with short delays
+        async def short_health_check():
+            for _ in range(2):
+                await asyncio.sleep(0.1)
+                if not bridge._adapter.is_connected:
+                    await bridge._adapter.disconnect()
+                    await bridge._adapter.connect()
+
+        bridge._health_check_task = asyncio.create_task(short_health_check())
+
+        # Wait for both attempts
+        await asyncio.sleep(0.5)
+
+        # Should have attempted reconnect twice
+        assert mock_adapter.connect.call_count == 2
+
+        # Cleanup
+        await bridge.stop()
+
+    @pytest.mark.asyncio
+    async def test_health_check_timeout_does_not_hang(self):
+        """Health check should timeout and retry if connect() hangs."""
+        bridge = IMBridge(_make_config(), _make_eternity())
+        mock_adapter = AsyncMock()
+
+        async def slow_disconnect():
+            await asyncio.sleep(60)  # Simulate hanging disconnect
+
+        mock_adapter.disconnect = slow_disconnect
+        mock_adapter.connect = AsyncMock(return_value=True)
+        bridge._adapter = mock_adapter
+
+        # Simulate disconnected state
+        mock_adapter.is_connected = False
+
+        # Start health check with short timeout
+        async def test_health_check():
+            await asyncio.sleep(0.1)
+            if not bridge._adapter.is_connected:
+                try:
+                    await asyncio.wait_for(bridge._adapter.disconnect(), timeout=0.2)
+                    await asyncio.wait_for(bridge._adapter.connect(), timeout=0.2)
+                except asyncio.TimeoutError:
+                    pass  # Expected
+
+        bridge._health_check_task = asyncio.create_task(test_health_check())
+
+        # Should complete within timeout, not hang
+        await asyncio.sleep(0.5)
+
+        # Cleanup
         await bridge.stop()

@@ -33,6 +33,7 @@ class IMBridge:
         self._tool_notify: dict[str, bool] = {}  # chat_id → enabled
         self._image_notify: dict[str, bool] = {}  # chat_id → enabled
         self._progress_notify: dict[str, bool] = {}  # chat_id → enabled
+        self._health_check_task: asyncio.Task | None = None
         self._load_state()
 
     def _load_state(self) -> None:
@@ -99,8 +100,50 @@ class IMBridge:
         connected = await self._adapter.connect()
         if connected:
             logger.info("IM bridge connected: %s", platform_name)
+            self._start_health_check()
         else:
             logger.error("IM bridge connection failed")
+
+    def _start_health_check(self) -> None:
+        """Start background task that monitors and reconnects on disconnect."""
+        if self._health_check_task and not self._health_check_task.done():
+            return
+        self._health_check_task = asyncio.create_task(self._health_check_loop())
+
+    async def _health_check_loop(self) -> None:
+        """Periodically check adapter connection, reconnect on disconnect."""
+        interval = 60
+        retry_delay = 30
+        max_retries = 1024
+        op_timeout = 30
+
+        while self._adapter:
+            await asyncio.sleep(interval)
+            if not self._adapter:
+                break
+
+            if self._adapter.is_connected:
+                continue
+
+            logger.warning("IM bridge disconnected, attempting reconnect")
+            for attempt in range(1, max_retries + 1):
+                try:
+                    await asyncio.wait_for(self._adapter.disconnect(), timeout=op_timeout)
+                    connected = await asyncio.wait_for(self._adapter.connect(), timeout=op_timeout)
+                    if connected:
+                        logger.info("IM bridge reconnected (attempt %d)", attempt)
+                        break
+                    else:
+                        logger.warning("IM bridge reconnect attempt %d failed", attempt)
+                except asyncio.TimeoutError:
+                    logger.warning("IM bridge reconnect attempt %d timed out", attempt)
+                except Exception as e:
+                    logger.warning("IM bridge reconnect attempt %d error: %s", attempt, e)
+
+                if attempt < max_retries:
+                    await asyncio.sleep(retry_delay)
+            else:
+                logger.error("IM bridge reconnect exhausted after %d attempts", max_retries)
 
     def _create_adapter(self, platform, pcfg):
         """Instantiate the appropriate hermes platform adapter."""
@@ -347,7 +390,18 @@ class IMBridge:
                 self._active_streams.pop(chat_id, None)
 
     async def stop(self) -> None:
-        """Disconnect the adapter."""
+        """Disconnect the adapter and stop health check."""
+        if self._health_check_task and not self._health_check_task.done():
+            self._health_check_task.cancel()
+            try:
+                await self._health_check_task
+            except asyncio.CancelledError:
+                pass
         if self._adapter:
             logger.info("Stopping IM bridge")
-            await self._adapter.disconnect()
+            try:
+                await asyncio.wait_for(self._adapter.disconnect(), timeout=10)
+            except asyncio.TimeoutError:
+                logger.warning("IM bridge disconnect timed out")
+            except Exception as e:
+                logger.warning("IM bridge disconnect error: %s", e)
