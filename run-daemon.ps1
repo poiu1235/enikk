@@ -7,4 +7,4 @@ if (-not $isAdmin) {
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $venvPython = Join-Path $scriptDir ".venv\Scripts\python.exe"
 
-& $venvPython -m enikk.cli daemon --config (Join-Path $scriptDir "config.yaml")
+& $venvPython -m enikk

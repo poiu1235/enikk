@@ -1,4 +1,4 @@
-"""Enikk CLI — single entrypoint for daemon."""
+"""Enikk daemon entry point."""
 import argparse
 import asyncio
 import io
@@ -9,8 +9,17 @@ import sys
 import threading
 from pathlib import Path
 
-from . import __version__
-from .config import enikk_home
+# Parse --home-dir FIRST, before any other enikk imports
+_parser = argparse.ArgumentParser(prog="enikk", description="Enikk: Self-improving GUI Agent.")
+_parser.add_argument("--home-dir", type=str, help="Override Enikk home directory")
+_args, _ = _parser.parse_known_args()
+
+if _args.home_dir:
+    os.environ["ENIKK_HOME"] = _args.home_dir
+
+# Now safe to import enikk modules (they'll use the overridden home dir)
+from .version import __version__  # noqa: E402
+from .config import enikk_home  # noqa: E402
 
 # Must be set BEFORE importing enikk modules (which import hermes at module level)
 _enikk_home_path = enikk_home()
@@ -40,12 +49,9 @@ async def _run_im_bridge(im_bridge) -> None:
             await asyncio.sleep(delay)
 
 
-# ── HTTP daemon command ───────────────────────────────────────────────
-
-def cmd_daemon(args):
-    """Start the Enikk daemon process (HTTP mode)."""
-    # Lazy imports: keep lightweight commands (version, --help) fast by
-    # deferring heavy deps (hermes, ultralytics, fastapi) until daemon starts.
+def main():
+    """Start the Enikk daemon process."""
+    # Lazy imports: keep --help fast by deferring heavy deps until daemon starts.
     import uvicorn
     import webview
 
@@ -57,17 +63,38 @@ def cmd_daemon(args):
         sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
         sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
-    if args.config:
-        cfg = Config.from_yaml(args.config)
-    else:
-        cfg = Config()
+    logo = (r"""
+  _____   _   _  _____  _  __  _  __
+ |  ___| | \ | ||_   _|| |/ / | |/ /
+ | |__   |  \| |  | |  | ' /  | ' /
+ |  __|  | . ` |  | |  |  <   |  <
+ | |___  | |\  | _| |_ | . \  | . \
+ |_____| |_| \_||_____||_|\_\ |_|\_\
+
+ Enikk v""" + __version__ + r""" - Self-improving GUI Agent
+""")
+    print(logo, flush=True)
 
     logging.basicConfig(
-        level=getattr(logging, cfg.log_level.upper(), logging.INFO),
+        level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
         force=True,
     )
+    logger.info("Home directory: %s", _enikk_home_path)
+
+    # Load config from {home_dir}/config.yaml
+    config_path = _enikk_home_path / "config.yaml"
+    if config_path.exists():
+        cfg = Config.from_yaml(str(config_path))
+        # Adjust log level from config
+        log_level = getattr(logging, cfg.log_level.upper(), logging.INFO)
+        logging.getLogger().setLevel(log_level)
+    else:
+        cfg = Config()
+        logger.info("No config.yaml found at %s, using defaults", config_path)
+
+    logger.info("Dashboard: http://%s:%s/", cfg.server.host, cfg.server.port)
 
     # Also write logs to home/logs/enikk.log (rotate 5 files × 10MB)
     log_dir = _enikk_home_path / "logs"
@@ -86,20 +113,6 @@ def cmd_daemon(args):
 
     for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
         logging.getLogger(name).handlers.clear()
-
-    logo = r"""
-  _____   _   _  _____  _  __  _  __
- |  ___| | \ | ||_   _|| |/ / | |/ /
- | |__   |  \| |  | |  | ' /  | ' /
- |  __|  | . ` |  | |  |  <   |  <
- | |___  | |\  | _| |_ | . \  | . \
- |_____| |_| \_||_____||_|\_\ |_|\_\
-
- Enikk - Self-improving GUI Agent
-
- Dashboard: http://{host}:{port}/
-"""
-    logger.info(logo.format(host=cfg.server.host, port=cfg.server.port))
 
     eternity = Eternity(cfg)
     eternity.setup()
@@ -124,7 +137,7 @@ def cmd_daemon(args):
         logger.info("IM bridge started (%s)", platform_name)
 
     timeout = 2
-    logger.info(f"Starting API server on {cfg.server.host}:{cfg.server.port}")
+    logger.info("Starting API server on %s:%s", cfg.server.host, cfg.server.port)
 
     # Start uvicorn in background thread
     uvicorn_thread = threading.Thread(
@@ -171,36 +184,6 @@ def cmd_daemon(args):
             logger.info("IM bridge stopped")
         eternity.shutdown(timeout=timeout)
         os._exit(0)
-
-
-# ── Version command ───────────────────────────────────────────────────
-
-def cmd_version(args):
-    """Show version information."""
-    print(f"Enikk v{__version__}")
-
-
-# ── Main entrypoint ───────────────────────────────────────────────────
-
-def main():
-    parser = argparse.ArgumentParser(
-        prog="enikk", description="Enikk: Self-improving GUI Agent."
-    )
-    sub = parser.add_subparsers(dest="command")
-
-    daemon_p = sub.add_parser("daemon", help="Start the game monitor daemon (HTTP)")
-    daemon_p.add_argument("--config", type=str, help="Path to YAML config file")
-    daemon_p.set_defaults(func=cmd_daemon)
-
-    version_p = sub.add_parser("version", help="Show version information")
-    version_p.set_defaults(func=cmd_version)
-
-    args = parser.parse_args()
-    if not args.command:
-        parser.print_help()
-        sys.exit(1)
-
-    args.func(args)
 
 
 if __name__ == "__main__":

@@ -47,21 +47,18 @@ uv venv --seed
 # Install (editable)
 uv pip install -e .
 
-# Run daemon
-enikk daemon
+# Run daemon (config loaded from {home_dir}/config.yaml)
+enikk
 
-# Run daemon with custom paths
-enikk daemon --launcher-path "D:\NIKKE\launcher.exe" --game-path "D:\NIKKE\game.exe"
-
-# Run daemon with config file
-enikk daemon --config config.yaml
+# Run daemon with custom home directory
+enikk --home-dir "D:\CustomEnikkHome"
 
 # Client commands (requires daemon running)
 enikk screenshot -o screen.jpg
 enikk click 960 540
 
 # AI agent (requires daemon running + LLM API configured)
-enikk agent "navigate to the daily missions" --config config.yaml
+enikk agent "navigate to the daily missions"
 enikk agent "complete the current event" --model qwen3.6-plus --base-url https://api.example.com --api-key sk-xxx
 ```
 

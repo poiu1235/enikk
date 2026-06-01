@@ -14,6 +14,8 @@ logger = logging.getLogger(__name__)
 
 def enikk_home() -> Path:
     """Enikk home directory for config/data storage."""
+    if "ENIKK_HOME" in os.environ:
+        return Path(os.environ["ENIKK_HOME"])
     if os.name == "nt":
         return Path(os.environ["LOCALAPPDATA"]) / "Enikk"
     return Path.home() / ".enikk"

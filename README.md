@@ -132,7 +132,11 @@ server:
 ### Start the daemon
 
 ```bash
-enikk daemon --config config.yaml
+# Config is loaded from {home_dir}/config.yaml
+enikk
+
+# Or specify a custom home directory
+enikk --home-dir /path/to/custom/home
 ```
 
 The daemon starts the HTTP server and IM bridge (if configured). You'll see:
@@ -197,7 +201,7 @@ enikk screenshot -o screen.jpg
 enikk click 500 300
 
 # Run agent directly (one-shot, no daemon)
-enikk agent "navigate to settings" --config config.yaml
+enikk agent "navigate to settings"
 enikk agent "complete the current event" --model qwen3.6-plus
 ```
 
