@@ -7,7 +7,6 @@ screenshots/
 config.yaml
 
 # Data files
-weights/
 accounts/
 auth.json
 auth.lock
