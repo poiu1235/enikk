@@ -1044,7 +1044,8 @@ function setLang(lang) {
     <div class="text-center text-gray-400 text-xs mt-2">
       <p>
         <span class="text-gray-500">Tips:</span>
-        <span x-text="currentTipIndex === 0 ? t('chat.stop_hint') : t('chat.teach_hint')" x-transition.opacity.duration.500ms></span>
+        <span x-show="currentTipIndex === 0" x-transition.opacity.duration.500ms x-text="t('chat.stop_hint')"></span>
+        <span x-show="currentTipIndex === 1" x-transition.opacity.duration.500ms x-text="t('chat.teach_hint')"></span>
       </p>
     </div>
   </div>
