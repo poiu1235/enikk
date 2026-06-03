@@ -249,7 +249,7 @@ const translations = {
       confirm_delete: '确定要删除应用 {name} 吗？'
     },
     status: {
-      icon_finder: 'Icon Finder', connected: '已连接', disconnected: '未连接'
+      icon_finder: 'Icon Finder', im: 'IM', connected: '已连接', disconnected: '未连接'
     }
   },
   'en': {
@@ -291,7 +291,7 @@ const translations = {
       confirm_delete: 'Are you sure you want to delete app {name}?'
     },
     status: {
-      icon_finder: 'Icon Finder', connected: 'Connected', disconnected: 'Disconnected'
+      icon_finder: 'Icon Finder', im: 'IM', connected: 'Connected', disconnected: 'Disconnected'
     }
   }
 };
@@ -433,9 +433,10 @@ function setLang(lang) {
                   <input type="checkbox" x-model="config.im.platforms.qqbot.enabled" class="w-4 h-4 rounded border-border text-accent focus:ring-accent/30" />
                   <span class="text-xs text-gray-500" x-text="t('config.enabled')"></span>
                 </label>
-                <span class="text-sm font-medium text-gray-700">IM</span>
-                <a href="https://q.qq.com/qqbot/openclaw/index.html" target="_blank" class="text-xs text-blue-500 hover:text-blue-600" title="Open QQ Bot management page">
+                <span class="text-sm font-medium text-gray-700">QQ Bot</span>
+                <a href="https://q.qq.com/qqbot/openclaw/index.html" target="_blank" class="text-xs text-blue-500 hover:text-blue-600 inline-flex items-center gap-0.5" title="QQ开放平台">
                   <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                  QQ开放平台
                 </a>
               </div>
               <div class="space-y-3">
@@ -775,7 +776,7 @@ function setLang(lang) {
       <!-- IM Status -->
       <div class="flex items-center gap-1.5 cursor-pointer relative" @click="imTooltip = !imTooltip" x-show="systemStatus.im?.enabled">
         <div class="w-2 h-2 rounded-full" :class="systemStatus.im?.connected ? 'bg-green-500' : 'bg-red-500'"></div>
-        <span x-text="systemStatus.im?.platform || 'IM'"></span>
+        <span x-text="t('status.im')"></span>
         <!-- Tooltip -->
         <div x-show="imTooltip" @click.away="imTooltip = false" class="absolute bottom-full left-0 mb-2 px-3 py-2 bg-gray-800 text-white text-xs rounded shadow-lg z-50 whitespace-nowrap">
           <div x-text="systemStatus.im?.message || ''"></div>
