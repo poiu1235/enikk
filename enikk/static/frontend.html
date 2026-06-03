@@ -225,7 +225,6 @@ const translations = {
       saved_restart: '配置已保存，重启程序后生效',
       failed_load: '加载配置失败', failed_save: '保存配置失败',
       tab_basic: '基本配置', tab_apps: '应用配置', tab_advanced: '高级配置',
-      apps_placeholder: '应用配置功能开发中...'
     },
     sidebar: {
       new_chat: '新对话', collapse: '折叠侧边栏', no_conversations: '暂无对话',
@@ -240,7 +239,15 @@ const translations = {
       call: '调用', step: '步骤', copy: '复制', message_placeholder: '输入消息...',
       stop: '停止', send: '发送', stop_hint: '发送 "/stop" 停止当前任务'
     },
-    time: { today: '今天', yesterday: '昨天', last_7_days: '最近7天', older: '更早' }
+    time: { today: '今天', yesterday: '昨天', last_7_days: '最近7天', older: '更早' },
+    apps: {
+      empty: '还没有配置应用', add: '添加应用', edit: '编辑应用',
+      name: '名称', path: '路径', advanced: '高级设置',
+      launcher_path: '启动器路径', timeout: '启动超时 (秒)',
+      name_required: '请输入应用名称', path_required: '请选择可执行文件',
+      save_failed: '保存失败', delete_failed: '删除失败',
+      confirm_delete: '确定要删除应用 {name} 吗？'
+    }
   },
   'en': {
     config: {
@@ -257,7 +264,6 @@ const translations = {
       saved_restart: 'Configuration saved, restart to take effect',
       failed_load: 'Failed to load configuration', failed_save: 'Failed to save configuration',
       tab_basic: 'Basic', tab_apps: 'Apps', tab_advanced: 'Advanced',
-      apps_placeholder: 'App configuration coming soon...'
     },
     sidebar: {
       new_chat: 'New Chat', collapse: 'Collapse sidebar', no_conversations: 'No conversations yet',
@@ -272,7 +278,15 @@ const translations = {
       call: 'call', step: 'Step', copy: 'Copy', message_placeholder: 'Message Enikk',
       stop: 'Stop', send: 'Send', stop_hint: 'Send "/stop" to stop current task'
     },
-    time: { today: 'Today', yesterday: 'Yesterday', last_7_days: 'Last 7 days', older: 'Older' }
+    time: { today: 'Today', yesterday: 'Yesterday', last_7_days: 'Last 7 days', older: 'Older' },
+    apps: {
+      empty: 'No apps configured yet', add: 'Add App', edit: 'Edit App',
+      name: 'Name', path: 'Path', advanced: 'Advanced Settings',
+      launcher_path: 'Launcher Path', timeout: 'Launch Timeout (seconds)',
+      name_required: 'Please enter app name', path_required: 'Please select executable file',
+      save_failed: 'Save failed', delete_failed: 'Delete failed',
+      confirm_delete: 'Are you sure you want to delete app {name}?'
+    }
   }
 };
 
@@ -440,8 +454,57 @@ function setLang(lang) {
 
         <!-- Apps -->
         <div x-show="configTab === 'apps'">
-          <div class="text-center text-gray-400 text-sm py-12" x-text="t('config.apps_placeholder')"></div>
+          <div class="space-y-4">
+            <!-- App list -->
+            <template x-for="app in apps" :key="app.name">
+              <div class="border border-border rounded-lg p-4 space-y-3">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                      <line x1="8" y1="21" x2="16" y2="21"/>
+                      <line x1="12" y1="17" x2="12" y2="21"/>
+                    </svg>
+                    <span class="text-sm font-medium text-gray-700" x-text="app.name"></span>
+                  </div>
+                  <div class="flex gap-2">
+                    <button @click="editApp(app)" class="p-1.5 text-gray-400 hover:text-blue-600 rounded cursor-pointer" title="Edit">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                        <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                      </svg>
+                    </button>
+                    <button @click="deleteApp(app.name)" class="p-1.5 text-gray-400 hover:text-red-600 rounded cursor-pointer" title="Delete">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <polyline points="3 6 5 6 21 6"/>
+                        <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <div class="text-xs text-gray-500 font-mono truncate" x-text="app.app_path"></div>
+                <div x-show="app.launcher_path" class="text-xs text-gray-400 font-mono truncate">
+                  <span class="text-gray-500">Launcher:</span> <span x-text="app.launcher_path"></span>
+                </div>
+              </div>
+            </template>
+
+            <!-- Empty state -->
+            <div x-show="apps.length === 0" class="text-center text-gray-400 text-sm py-8">
+              <p x-text="t('apps.empty')"></p>
+            </div>
+
+            <!-- Add app button -->
+            <button @click="addApp()" class="w-full border-2 border-dashed border-border rounded-lg p-4 text-gray-400 hover:border-accent hover:text-accent transition-colors cursor-pointer flex items-center justify-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="5" x2="12" y2="19"/>
+                <line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+              <span x-text="t('apps.add')"></span>
+            </button>
+          </div>
         </div>
+
 
         <!-- Advanced: Log Level -->
         <div x-show="configTab === 'advanced'">
@@ -515,6 +578,64 @@ function setLang(lang) {
         <span x-text="configSaving ? t('config.saving') : t('config.save')"></span>
       </button>
       <span x-show="configSaved" class="text-xs text-amber-600 ml-2" x-text="t('config.saved_restart')"></span>
+    </div>
+  </div>
+</div>
+
+<!-- App Editor Modal -->
+<div x-show="showAppEditor" x-transition class="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4" @click.self="showAppEditor = false">
+  <div class="bg-white rounded-xl shadow-2xl w-full max-w-md flex flex-col" @click.stop>
+    <!-- Header -->
+    <div class="flex items-center justify-between px-6 py-4 border-b border-border">
+      <h2 class="text-lg font-semibold text-gray-800" x-text="appEditor.editing ? t('apps.edit') : t('apps.add')"></h2>
+      <button @click="showAppEditor = false" class="text-gray-400 hover:text-gray-600 cursor-pointer">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path d="M18 6L6 18M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Body -->
+    <div class="px-6 py-5 space-y-4">
+      <div>
+        <label class="block text-xs text-gray-500 mb-1" x-text="t('apps.name')"></label>
+        <input type="text" x-model="appEditor.name" :disabled="appEditor.editing" class="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent disabled:bg-gray-100 disabled:text-gray-500" placeholder="my-app" />
+      </div>
+      <div>
+        <label class="block text-xs text-gray-500 mb-1" x-text="t('apps.path')"></label>
+        <div class="flex gap-2">
+          <input type="text" x-model="appEditor.app_path" class="flex-1 px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent" placeholder="C:\path\to\app.exe" />
+          <button @click="pickFile('appEditor.app_path', 'exe')" class="px-3 py-2 border border-border rounded-lg text-sm text-gray-600 hover:bg-hover cursor-pointer" :title="t('config.browse_dir')">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="pt-2">
+        <details>
+          <summary class="text-xs text-gray-500 cursor-pointer hover:text-gray-700" x-text="t('apps.advanced')"></summary>
+          <div class="mt-3 space-y-4">
+            <div>
+              <label class="block text-xs text-gray-500 mb-1" x-text="t('apps.launcher_path')"></label>
+              <div class="flex gap-2">
+                <input type="text" x-model="appEditor.launcher_path" class="flex-1 px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent" placeholder="(same as app path)" />
+                <button @click="pickFile('appEditor.launcher_path', 'exe')" class="px-3 py-2 border border-border rounded-lg text-sm text-gray-600 hover:bg-hover cursor-pointer" :title="t('config.browse_dir')">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+                </button>
+              </div>
+            </div>
+            <div>
+              <label class="block text-xs text-gray-500 mb-1" x-text="t('apps.timeout')"></label>
+              <input type="number" x-model.number="appEditor.launch_timeout" class="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent" min="10" max="600" />
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-border">
+      <button @click="showAppEditor = false" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 cursor-pointer" x-text="t('config.cancel')"></button>
+      <button @click="saveApp()" class="px-4 py-2 bg-accent text-white text-sm rounded-lg hover:bg-accent/90 cursor-pointer" x-text="t('config.save')"></button>
     </div>
   </div>
 </div>
@@ -899,6 +1020,9 @@ function chatApp() {
     modelTesting: false,
     modelTestResult: '',
     imStatus: { enabled: false, connected: false, platform: null },
+    apps: [],
+    showAppEditor: false,
+    appEditor: { editing: false, name: '', app_path: '', launcher_path: '', launch_timeout: 120 },
     _nextUid: 1,  // unique ID counter for message parts
     _scrollTimer: null,
     _streamMsgVer: 0,  // version counter to force x-for re-evaluation on SSE events
@@ -943,6 +1067,99 @@ function chatApp() {
       modal.classList.remove('shake');
       void modal.offsetWidth;
       modal.classList.add('shake');
+    },
+
+    async fetchApps() {
+      try {
+        const resp = await fetch('/api/apps');
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const data = await resp.json();
+        this.apps = data.apps || [];
+      } catch (e) {
+        console.error('Failed to fetch apps:', e);
+      }
+    },
+
+    addApp() {
+      this.appEditor = { editing: false, name: '', app_path: '', launcher_path: '', launch_timeout: 120 };
+      this.showAppEditor = true;
+    },
+
+    editApp(app) {
+      this.appEditor = {
+        editing: true,
+        name: app.name,
+        app_path: app.app_path,
+        launcher_path: app.launcher_path || '',
+        launch_timeout: app.launch_timeout || 120,
+      };
+      this.showAppEditor = true;
+    },
+
+    async saveApp() {
+      if (!this.appEditor.name.trim()) {
+        this.showError(this.t('apps.name_required'));
+        return;
+      }
+      if (!this.appEditor.app_path.trim()) {
+        this.showError(this.t('apps.path_required'));
+        return;
+      }
+      try {
+        const method = this.appEditor.editing ? 'PUT' : 'POST';
+        const url = this.appEditor.editing ? `/api/apps/${this.appEditor.name}` : '/api/apps';
+        const resp = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: this.appEditor.name,
+            app_path: this.appEditor.app_path,
+            launcher_path: this.appEditor.launcher_path || null,
+            launch_timeout: this.appEditor.launch_timeout,
+          }),
+        });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          throw new Error(err.detail || 'HTTP ' + resp.status);
+        }
+        this.showAppEditor = false;
+        await this.fetchApps();
+      } catch (e) {
+        this.showError(this.t('apps.save_failed') + ': ' + e.message);
+      }
+    },
+
+    async deleteApp(name) {
+      if (!confirm(this.t('apps.confirm_delete').replace('{name}', name))) return;
+      try {
+        const resp = await fetch(`/api/apps/${name}`, { method: 'DELETE' });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          throw new Error(err.detail || 'HTTP ' + resp.status);
+        }
+        await this.fetchApps();
+      } catch (e) {
+        this.showError(this.t('apps.delete_failed') + ': ' + e.message);
+      }
+    },
+
+    async pickFile(target, ext) {
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.pick_file) {
+        try {
+          const fileTypes = ext ? `*.${ext}` : '';
+          const result = await window.pywebview.api.pick_file(fileTypes);
+          if (result) {
+            const parts = target.split('.');
+            if (parts.length === 2) {
+              this[parts[0]][parts[1]] = result;
+            }
+          }
+        } catch (e) {
+          console.error('File picker failed:', e);
+        }
+      } else {
+        alert('File picker requires pywebview runtime');
+      }
     },
 
     async fetchIMStatus() {
@@ -1563,6 +1780,7 @@ function chatApp() {
       this.showConfigModal = true;
       this.config = null;
       this.configSaved = false;
+      await this.fetchApps();
       try {
         const resp = await fetch('/api/config');
         if (!resp.ok) throw new Error('HTTP ' + resp.status);

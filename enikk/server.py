@@ -214,6 +214,91 @@ def create_app(eternity: Eternity, im_bridge=None) -> FastAPI:
             raise HTTPException(status_code=400, detail=str(e))
         return {"status": "updated"}
 
+    @app.get("/api/apps")
+    def list_apps():
+        """List all registered apps."""
+        apps = []
+        for name, ac in eternity.config.apps.items():
+            apps.append({
+                "name": name,
+                "app_path": ac.app_path,
+                "launcher_path": ac.launcher_path,
+                "launch_timeout": ac.launch_timeout,
+            })
+        return {"apps": apps}
+
+    @app.post("/api/apps")
+    def register_app(data: dict):
+        """Register or update an app."""
+        name = data.get("name", "").strip()
+        app_path = data.get("app_path", "").strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="name is required")
+        if not app_path:
+            raise HTTPException(status_code=400, detail="app_path is required")
+
+        # Check if app already exists
+        if name in eternity.config.apps:
+            # Update existing app
+            update_data = {"app_path": app_path}
+            if "launcher_path" in data:
+                update_data["launcher_path"] = data["launcher_path"]
+            if "launch_timeout" in data:
+                update_data["launch_timeout"] = int(data["launch_timeout"])
+            ac = eternity.config.update_app(name, **update_data)
+            if not ac:
+                raise HTTPException(status_code=404, detail=f"App not found: {name}")
+            return {"status": "updated", "app": {
+                "name": ac.name,
+                "app_path": ac.app_path,
+                "launcher_path": ac.launcher_path,
+                "launch_timeout": ac.launch_timeout,
+            }}
+        else:
+            # Register new app
+            ac = eternity.config.register_app(name, app_path)
+            if "launcher_path" in data and data["launcher_path"]:
+                ac.launcher_path = data["launcher_path"]
+            if "launch_timeout" in data:
+                ac.launch_timeout = int(data["launch_timeout"])
+            return {"status": "registered", "app": {
+                "name": ac.name,
+                "app_path": ac.app_path,
+                "launcher_path": ac.launcher_path,
+                "launch_timeout": ac.launch_timeout,
+            }}
+
+    @app.delete("/api/apps/{name}")
+    def delete_app(name: str):
+        """Delete an app."""
+        if eternity.config.delete_app(name):
+            return {"status": "deleted", "name": name}
+        raise HTTPException(status_code=404, detail=f"App not found: {name}")
+
+    @app.put("/api/apps/{name}")
+    def update_app(name: str, data: dict):
+        """Update an existing app."""
+        if name not in eternity.config.apps:
+            raise HTTPException(status_code=404, detail=f"App not found: {name}")
+        update_data = {}
+        if "app_path" in data:
+            update_data["app_path"] = data["app_path"].strip()
+        if "launcher_path" in data:
+            update_data["launcher_path"] = data["launcher_path"]
+        if "launch_timeout" in data:
+            update_data["launch_timeout"] = int(data["launch_timeout"])
+        ac = eternity.config.update_app(name, **update_data)
+        if not ac:
+            raise HTTPException(status_code=400, detail="Update failed")
+        return {"status": "updated", "app": {
+            "name": ac.name,
+            "app_path": ac.app_path,
+            "launcher_path": ac.launcher_path,
+            "launch_timeout": ac.launch_timeout,
+        }}
+
+
+
     @app.post("/api/model/test")
     async def test_model_connection(req: dict):
         """Test LLM API connection with given credentials."""

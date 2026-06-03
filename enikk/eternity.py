@@ -89,7 +89,7 @@ class Eternity:
         logging.getLogger("run_agent").setLevel(logging.WARNING)
 
         tools.skills_sync.sync_skills(quiet=True)
-        self.config.load_custom_apps()
+        self.config.load_apps()
 
         self._session_db = SessionDB()
         logger.info("SessionDB at %s", self._session_db.db_path)

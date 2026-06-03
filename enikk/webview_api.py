@@ -33,6 +33,38 @@ class WebviewAPI:
             return result[0]
         return None
 
+    def pick_file(self, file_types: str = "") -> str | None:
+        """Open a file picker dialog and return the selected path.
+
+        file_types: extension like "exe" or pattern like "*.exe"
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info("pick_file called with file_types=%r", file_types)
+
+        # Build file filter in pywebview format: "description (*.ext)"
+        if not file_types:
+            file_filter = "All Files (*.*)"
+        else:
+            # Extract extension if it's a pattern like *.exe
+            ext = file_types.replace("*.", "").replace("*", "")
+            if ext:
+                file_filter = f"Executable (*.{ext})"
+            else:
+                file_filter = "All Files (*.*)"
+
+        logger.info("passing file_types=%r to create_file_dialog", file_filter)
+
+        result = webview.windows[0].create_file_dialog(
+            webview.FileDialog.OPEN,
+            directory=str(enikk_home()),
+            allow_multiple=False,
+            file_types=(file_filter,),  # must be a tuple
+        )
+        if result and result[0]:
+            return result[0]
+        return None
+
 
 def start_webview(
     url: str,

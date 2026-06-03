@@ -66,14 +66,6 @@ class TestWorkspaceConfig:
 class TestFromYaml:
     def test_full(self):
         path = _write_yaml("""
-apps:
-  nikke:
-    app_path: "D:\\\\nikke\\\\game.exe"
-    launcher_path: "D:\\\\nikke\\\\launcher.exe"
-    launch_timeout: 60
-server:
-  host: "0.0.0.0"
-  port: 8080
 model:
   default: "gpt-4"
   provider: "openai"
@@ -89,39 +81,15 @@ workspace:
         finally:
             os.unlink(path)
 
-        ac = cfg.apps["nikke"]
-        assert ac.app_path == r"D:\nikke\game.exe"
-        assert ac.launcher_path == r"D:\nikke\launcher.exe"
-        assert ac.launch_timeout == 60
         assert cfg.model.default == "gpt-4"
         assert cfg.model.provider == "openai"
         assert cfg.model.api_key == "sk-test"
         assert cfg.model.max_tokens == 64000
 
-    def test_legacy_games_key(self):
-        """Legacy 'games' key in YAML still works (backward compat)."""
-        path = _write_yaml("""
-games:
-  nikke:
-    game_path: "D:\\\\nikke\\\\game.exe"
-    launcher_path: "D:\\\\nikke\\\\launcher.exe"
-""")
-        try:
-            cfg = Config.from_yaml(path)
-        finally:
-            os.unlink(path)
-
-        # Legacy game_path maps to app_path
-        ac = cfg.apps["nikke"]
-        assert ac.app_path == r"D:\nikke\game.exe"
-        assert ac.launcher_path == r"D:\nikke\launcher.exe"
-
     def test_unknown_keys_ignored(self):
         path = _write_yaml("""
-apps:
-  nikke:
-    app_path: "C:\\\\g.exe"
-    unknown_field: should_be_ignored
+model:
+  default: "gpt-4"
 server:
   host: "127.0.0.1"
   bogus: 42
@@ -131,7 +99,7 @@ server:
         finally:
             os.unlink(path)
 
-        assert cfg.apps["nikke"].app_path == r"C:\g.exe"
+        assert cfg.model.default == "gpt-4"
 
     def test_empty_data(self):
         path = _write_yaml("")
@@ -157,3 +125,96 @@ def test_apps_access():
     cfg.apps["myapp"] = AppConfig(app_path=r"D:\my.exe")
     assert cfg.apps["myapp"].app_path == r"D:\my.exe"
     assert cfg.apps["myapp"].app_name == "my.exe"
+
+
+# ── Apps persistence ──────────────────────────────────────────────────
+
+
+def test_save_and_load_apps(tmp_path, monkeypatch):
+    """Apps are persisted to apps.json and can be reloaded."""
+    import json
+    apps_file = tmp_path / "apps.json"
+    monkeypatch.setattr("enikk.config.CUSTOM_APPS_FILE", apps_file)
+
+    cfg = Config()
+    cfg.apps["test"] = AppConfig(
+        name="test",
+        app_path=r"C:\test.exe",
+        launcher_path=r"C:\launcher.exe",
+        launch_timeout=90,
+    )
+    cfg._save_apps()
+
+    assert apps_file.exists()
+    data = json.loads(apps_file.read_text())
+    assert "test" in data
+    assert data["test"]["app_path"] == r"C:\test.exe"
+    assert data["test"]["launcher_path"] == r"C:\launcher.exe"
+    assert data["test"]["launch_timeout"] == 90
+
+    # Load into a new config
+    cfg2 = Config()
+    cfg2.load_apps()
+    assert "test" in cfg2.apps
+    assert cfg2.apps["test"].app_path == r"C:\test.exe"
+    assert cfg2.apps["test"].launcher_path == r"C:\launcher.exe"
+    assert cfg2.apps["test"].launch_timeout == 90
+
+
+def test_register_app_persists(tmp_path, monkeypatch):
+    """register_app() persists to apps.json."""
+    import json
+    apps_file = tmp_path / "apps.json"
+    monkeypatch.setattr("enikk.config.CUSTOM_APPS_FILE", apps_file)
+
+    cfg = Config()
+    cfg.register_app("myapp", r"D:\my.exe")
+
+    assert "myapp" in cfg.apps
+    assert apps_file.exists()
+    data = json.loads(apps_file.read_text())
+    assert data["myapp"]["app_path"] == r"D:\my.exe"
+
+
+def test_delete_app_persists(tmp_path, monkeypatch):
+    """delete_app() removes from apps.json."""
+    import json
+    apps_file = tmp_path / "apps.json"
+    monkeypatch.setattr("enikk.config.CUSTOM_APPS_FILE", apps_file)
+
+    cfg = Config()
+    cfg.register_app("app1", r"D:\a1.exe")
+    cfg.register_app("app2", r"D:\a2.exe")
+    assert apps_file.exists()
+
+    cfg.delete_app("app1")
+    data = json.loads(apps_file.read_text())
+    assert "app1" not in data
+    assert "app2" in data
+    assert "app1" not in cfg.apps
+    assert "app2" in cfg.apps
+
+
+def test_update_app_persists(tmp_path, monkeypatch):
+    """update_app() persists changes to apps.json."""
+    import json
+    apps_file = tmp_path / "apps.json"
+    monkeypatch.setattr("enikk.config.CUSTOM_APPS_FILE", apps_file)
+
+    cfg = Config()
+    cfg.register_app("test", r"D:\old.exe")
+
+    cfg.update_app("test", app_path=r"D:\new.exe", launch_timeout=60)
+    data = json.loads(apps_file.read_text())
+    assert data["test"]["app_path"] == r"D:\new.exe"
+    assert data["test"]["launch_timeout"] == 60
+    assert cfg.apps["test"].app_path == r"D:\new.exe"
+
+
+def test_to_dict_excludes_apps():
+    """to_dict() should not include apps (they're stored separately)."""
+    cfg = Config()
+    cfg.apps["test"] = AppConfig(app_path=r"D:\test.exe")
+    d = cfg.to_dict()
+    assert "apps" not in d
+    assert "model" in d

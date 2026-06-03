@@ -68,7 +68,7 @@ class AppController:
         if app not in self._processes:
             ac = self.config.apps.get(app, AppConfig())
             self._processes[app] = process.AppProcessManager(
-                self.config.build_profile(app), timeout=ac.launch_timeout,
+                self.config.get_app_config(app), timeout=ac.launch_timeout,
             )
         return self._processes[app]
 
@@ -93,11 +93,11 @@ class AppController:
     # ── Window discovery ────────────────────────────────────────────────
 
     def find_app_window(self, app: str) -> int | None:
-        p = self.config.build_profile(app)
+        p = self.config.get_app_config(app)
         return self.window.find_by_path_and_class(p.app_path)
 
     def find_launcher_window(self, app: str) -> int | None:
-        p = self.config.build_profile(app)
+        p = self.config.get_app_config(app)
         if not p.launcher_path:
             return None
         return self.window.find_by_path_and_class(p.launcher_path)

@@ -21,7 +21,7 @@ def enikk_home() -> Path:
     return Path.home() / ".enikk"
 
 
-CUSTOM_APPS_FILE = enikk_home() / "custom_apps.json"
+CUSTOM_APPS_FILE = enikk_home() / "apps.json"
 
 
 @dataclass
@@ -97,11 +97,11 @@ class Config:
 
     # ── Helpers ───────────────────────────────────────────────────────
 
-    def build_profile(self, app: str) -> AppConfig:
+    def get_app_config(self, app: str) -> AppConfig:
         """Build an AppConfig with name set from config for a given app."""
         ac = self.apps.get(app)
         if ac is None:
-            raise KeyError(f"Unknown app '{app}' — add it to config.yaml under apps:")
+            raise KeyError(f"Unknown app '{app}' — register it via API first")
         return AppConfig(
             name=app,
             app_path=ac.app_path,
@@ -109,45 +109,66 @@ class Config:
             launch_timeout=ac.launch_timeout,
         )
 
+    def load_apps(self) -> None:
+        """Load apps from apps.json into self.apps."""
+        if not CUSTOM_APPS_FILE.exists():
+            return
+        try:
+            data = json.loads(CUSTOM_APPS_FILE.read_text())
+            for name, info in data.items():
+                self.apps[name] = AppConfig(
+                    name=name,
+                    app_path=info.get("app_path", ""),
+                    launcher_path=info.get("launcher_path"),
+                    launch_timeout=info.get("launch_timeout", 120),
+                )
+            logger.info("Loaded %d apps from %s", len(data), CUSTOM_APPS_FILE)
+        except Exception as e:
+            logger.warning("Failed to load apps: %s", e)
+
+    def _save_apps(self) -> None:
+        """Persist apps to apps.json."""
+        CUSTOM_APPS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        data = {}
+        for name, ac in self.apps.items():
+            data[name] = {
+                "app_path": ac.app_path,
+                "launcher_path": ac.launcher_path,
+                "launch_timeout": ac.launch_timeout,
+            }
+        CUSTOM_APPS_FILE.write_text(json.dumps(data, indent=2))
+
     def register_app(self, name: str, exe_path: str) -> AppConfig:
-        """Register a custom app and persist to custom_apps.json."""
+        """Register an app and persist to apps.json."""
         ac = AppConfig(
             name=name,
             app_path=exe_path,
             launcher_path=exe_path,
         )
         self.apps[name] = ac
-        self._persist_custom_app(name, exe_path)
+        self._save_apps()
         logger.info("Registered app: %s -> %s", name, exe_path)
         return ac
 
-    def _persist_custom_app(self, name: str, exe_path: str) -> None:
-        """Append to custom_apps.json."""
-        CUSTOM_APPS_FILE.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            data = json.loads(CUSTOM_APPS_FILE.read_text()) if CUSTOM_APPS_FILE.exists() else {}
-        except Exception:
-            data = {}
-        data[name] = {"exe": exe_path}
-        CUSTOM_APPS_FILE.write_text(json.dumps(data, indent=2))
+    def delete_app(self, name: str) -> bool:
+        """Delete an app and persist."""
+        if name not in self.apps:
+            return False
+        del self.apps[name]
+        self._save_apps()
+        logger.info("Deleted app: %s", name)
+        return True
 
-    def load_custom_apps(self) -> None:
-        """Load custom apps from custom_apps.json into self.apps."""
-        if not CUSTOM_APPS_FILE.exists():
-            return
-        try:
-            data = json.loads(CUSTOM_APPS_FILE.read_text())
-            for name, info in data.items():
-                if name not in self.apps:
-                    exe = info.get("exe", "")
-                    self.apps[name] = AppConfig(
-                        name=name,
-                        app_path=exe,
-                        launcher_path=exe,
-                    )
-                    logger.info("Loaded custom app: %s", name)
-        except Exception as e:
-            logger.warning("Failed to load custom apps: %s", e)
+    def update_app(self, name: str, **kwargs) -> AppConfig | None:
+        """Update an existing app's fields."""
+        if name not in self.apps:
+            return None
+        ac = self.apps[name]
+        for k, v in kwargs.items():
+            if hasattr(ac, k) and k != "name":
+                setattr(ac, k, v)
+        self._save_apps()
+        return ac
 
     # ── Serialization ─────────────────────────────────────────────────
 
@@ -157,18 +178,6 @@ class Config:
             data = yaml.safe_load(f) or {}
 
         cfg = cls()
-        # Support both "apps" and legacy "games" keys
-        apps_data = data.get("apps") or data.get("games")
-        if apps_data:
-            valid_fields = {f.name for f in fields(AppConfig)}
-            for name, gd in apps_data.items():
-                # Map legacy game_path → app_path
-                if "game_path" in gd and "app_path" not in gd:
-                    gd["app_path"] = gd.pop("game_path")
-                cfg.apps[name] = AppConfig(**{
-                    k: v for k, v in gd.items()
-                    if k in valid_fields and k != "name"
-                }, name=name)
         if "model" in data:
             md = data["model"]
             cfg.model = ModelConfig(**{
@@ -198,10 +207,10 @@ class Config:
         return cfg
 
     def to_dict(self) -> dict:
-        """Serialize config to dictionary for API responses."""
+        """Serialize config to dictionary for API responses (excluding apps, which are stored separately)."""
         def dc_to_dict(obj):
             if hasattr(obj, "__dataclass_fields__"):
-                return {k: dc_to_dict(v) for k, v in vars(obj).items() if not k.startswith("_")}
+                return {k: dc_to_dict(v) for k, v in vars(obj).items() if not k.startswith("_") and k != "apps"}
             if isinstance(obj, dict):
                 return {k: dc_to_dict(v) for k, v in obj.items()}
             return obj
