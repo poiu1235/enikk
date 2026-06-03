@@ -15,7 +15,7 @@ def get_bundle_weights_dir() -> Path | None:
     # PyInstaller frozen application
     if getattr(sys, 'frozen', False):
         # In frozen mode, data files are in sys._MEIPASS
-        bundle_dir = Path(sys._MEIPASS) / 'weights'
+        bundle_dir = Path(sys._MEIPASS) / 'weights'  # type: ignore[attr-defined]
         if bundle_dir.exists():
             return bundle_dir
     # Development mode: weights in package directory
