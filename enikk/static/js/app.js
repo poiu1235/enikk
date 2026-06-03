@@ -29,6 +29,8 @@ function chatApp() {
     configSaving: false,
     imTesting: false,
     imTestResult: '',
+    showAppId: false,
+    showClientSecret: false,
     configSaved: false,
     modelTesting: false,
     modelTestResult: '',
@@ -39,6 +41,7 @@ function chatApp() {
     apps: [],
     showAppEditor: false,
     appEditor: { editing: false, name: '', app_path: '', launcher_path: '', launch_timeout: 120 },
+    appVersion: '',
     _nextUid: 1,  // unique ID counter for message parts
     _scrollTimer: null,
     _streamMsgVer: 0,  // version counter to force x-for re-evaluation on SSE events
@@ -56,6 +59,7 @@ function chatApp() {
       });
       this.fetchSessions();
       this.fetchSystemStatus();
+      fetch('/api/version').then(r => r.ok ? r.json() : null).then(d => { if (d) this.appVersion = 'v' + d.version; }).catch(() => {});
       this._systemStatusTimer = setInterval(() => this.fetchSystemStatus(), 5000);
       // Initialize and rotate tips every 8 seconds (random order)
       const tips = () => [t('chat.stop_hint'), t('chat.teach_hint'), t('chat.images_hint'), t('chat.admin_hint'), t('chat.mouse_hint')];
@@ -729,10 +733,6 @@ function chatApp() {
     },
 
     async stopTyping() {
-      if (this.eventSource) {
-        this.eventSource.close();
-        this.eventSource = null;
-      }
       if (this.activeSessionId) {
         try {
           await fetch(`/api/sessions/${this.activeSessionId}/stop`, { method: 'POST' });
@@ -740,9 +740,24 @@ function chatApp() {
           console.error('Failed to stop session:', e);
         }
       }
-      this.isTyping = false;
-      this._streaming = false;
-      this._streamingMsg = null;
+      // Don't close EventSource or clear _streamingMsg here.
+      // The backend will emit a 'session: stopped' SSE event, which
+      // triggers the normal cleanup path (including loadSessionMessages).
+      // If no event arrives within 3s, fall back to manual cleanup.
+      setTimeout(() => {
+        if (this._streaming) {
+          if (this.eventSource) {
+            this.eventSource.close();
+            this.eventSource = null;
+          }
+          this.isTyping = false;
+          this._streaming = false;
+          this._streamingMsg = null;
+          if (this.activeSessionId) {
+            this.loadSessionMessages(this.activeSessionId);
+          }
+        }
+      }, 3000);
     },
 
     async copyMsg(text, btn) {

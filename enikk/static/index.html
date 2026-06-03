@@ -130,11 +130,23 @@
               <div class="space-y-3">
                 <div>
                   <label class="block text-xs text-gray-500 mb-1" x-text="t('config.app_id')"></label>
-                  <input type="text" x-model="config.im.platforms.qqbot.extra.app_id" class="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent" placeholder="App ID" />
+                  <div class="relative">
+                    <input :type="showAppId ? 'text' : 'password'" x-model="config.im.platforms.qqbot.extra.app_id" class="w-full px-3 py-2 pr-9 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent" placeholder="App ID" />
+                    <button type="button" @click="showAppId = !showAppId" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer" :title="showAppId ? '隐藏' : '查看'">
+                      <svg x-show="!showAppId" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                      <svg x-show="showAppId" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <label class="block text-xs text-gray-500 mb-1" x-text="t('config.client_secret')"></label>
-                  <input type="password" x-model="config.im.platforms.qqbot.extra.client_secret" class="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent" placeholder="Client secret" />
+                  <div class="relative">
+                    <input :type="showClientSecret ? 'text' : 'password'" x-model="config.im.platforms.qqbot.extra.client_secret" class="w-full px-3 py-2 pr-9 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent" placeholder="Client secret" />
+                    <button type="button" @click="showClientSecret = !showClientSecret" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer" :title="showClientSecret ? '隐藏' : '查看'">
+                      <svg x-show="!showClientSecret" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                      <svg x-show="showClientSecret" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                    </button>
+                  </div>
                 </div>
                 <div class="flex items-center gap-2">
                   <button @click="testIMConnection('qqbot')" class="px-3 py-1.5 text-xs border border-border rounded-lg text-gray-600 hover:bg-hover cursor-pointer" :disabled="imTesting">
@@ -417,6 +429,7 @@
             <div class="flex-1 min-w-0">
               <div class="text-sm text-gray-700 font-medium truncate">Enikk</div>
               <div class="text-xs text-gray-400" x-text="t('sidebar.dashboard')"></div>
+              <div class="text-[10px] text-gray-300" x-text="appVersion"></div>
             </div>
           </div>
         </div>

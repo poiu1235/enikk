@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from .config import enikk_home
 from .eternity import Eternity
+from .version import __version__
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +87,10 @@ def create_app(eternity: Eternity, im_bridge=None) -> FastAPI:
     @app.get("/health")
     def health():
         return {"status": "ok"}
+
+    @app.get("/api/version")
+    def get_version():
+        return {"version": __version__}
 
     @app.get("/api/sessions")
     def list_sessions(limit: int = Query(20, ge=1, le=100), offset: int = Query(0, ge=0)):
