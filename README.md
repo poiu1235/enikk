@@ -52,15 +52,9 @@ Runs entirely on your machine. Your data, screenshots, and credentials never lea
 </p>
 
 <p align="center">
-  <img src="docs/images/enikk-app.jpg" alt="App Configuration" width="800" />
+  <img src="docs/images/netease-music.jpg" alt="Netease Cloud Music" width="800" />
   <br/>
-  <em>App Configuration - Register and manage your applications</em>
-</p>
-
-<p align="center">
-  <img src="docs/images/enikk-im-configuration.jpg" alt="IM Configuration" width="800" />
-  <br/>
-  <em>IM Configuration - Connect QQ Bot for remote control</em>
+  <em>Real-world Demo - Enikk controlling Netease Cloud Music</em>
 </p>
 
 ---
