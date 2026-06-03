@@ -249,7 +249,7 @@ const translations = {
       confirm_delete: '确定要删除应用 {name} 吗？'
     },
     status: {
-      yolo: 'YOLO', connected: '已连接', disconnected: '未连接'
+      icon_finder: 'Icon Finder', connected: '已连接', disconnected: '未连接'
     }
   },
   'en': {
@@ -291,7 +291,7 @@ const translations = {
       confirm_delete: 'Are you sure you want to delete app {name}?'
     },
     status: {
-      yolo: 'YOLO', connected: 'Connected', disconnected: 'Disconnected'
+      icon_finder: 'Icon Finder', connected: 'Connected', disconnected: 'Disconnected'
     }
   }
 };
@@ -761,13 +761,13 @@ function setLang(lang) {
 
     <!-- Status Bar -->
     <div class="h-6 bg-gray-50 border-t border-border flex items-center px-3 text-xs text-gray-600 gap-4 flex-shrink-0">
-      <!-- YOLO Status -->
-      <div class="flex items-center gap-1.5 cursor-pointer relative" @click="yoloTooltip = !yoloTooltip">
-        <div class="w-2 h-2 rounded-full" :class="systemStatus.yolo?.available ? 'bg-green-500' : 'bg-red-500'"></div>
-        <span x-text="t('status.yolo')"></span>
+      <!-- Icon Finder Status -->
+      <div class="flex items-center gap-1.5 cursor-pointer relative" @click="iconFinderTooltip = !iconFinderTooltip">
+        <div class="w-2 h-2 rounded-full" :class="systemStatus.icon_finder?.available ? 'bg-green-500' : 'bg-red-500'"></div>
+        <span x-text="t('status.icon_finder')"></span>
         <!-- Tooltip -->
-        <div x-show="yoloTooltip" @click.away="yoloTooltip = false" class="absolute bottom-full left-0 mb-2 px-3 py-2 bg-gray-800 text-white text-xs rounded shadow-lg z-50 whitespace-nowrap">
-          <div x-text="systemStatus.yolo?.message || ''"></div>
+        <div x-show="iconFinderTooltip" @click.away="iconFinderTooltip = false" class="absolute bottom-full left-0 mb-2 px-3 py-2 bg-gray-800 text-white text-xs rounded shadow-lg z-50 whitespace-nowrap">
+          <div x-text="systemStatus.icon_finder?.message || ''"></div>
           <div class="absolute top-full left-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800"></div>
         </div>
       </div>
@@ -1046,8 +1046,8 @@ function chatApp() {
     configSaved: false,
     modelTesting: false,
     modelTestResult: '',
-    systemStatus: { yolo: { available: false, message: '' }, im: { enabled: false, connected: false, platform: null } },
-    yoloTooltip: false,
+    systemStatus: { icon_finder: { available: false, message: '' }, im: { enabled: false, connected: false, platform: null } },
+    iconFinderTooltip: false,
     imTooltip: false,
     apps: [],
     showAppEditor: false,

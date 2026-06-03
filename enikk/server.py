@@ -198,11 +198,11 @@ def create_app(eternity: Eternity, im_bridge=None) -> FastAPI:
 
     @app.get("/api/status")
     async def status():
-        """Get system status (YOLO, IM, etc.)."""
-        # YOLO status
-        yolo_available = False
+        """Get system status (icon finder, IM, etc.)."""
+        # Icon finder status
+        icon_finder_available = False
         if eternity._controller and eternity._controller.ui_parser:
-            yolo_available = eternity._controller.ui_parser.yolo_session is not None
+            icon_finder_available = eternity._controller.ui_parser.yolo_session is not None
 
         # IM status
         if im_bridge is None:
@@ -224,9 +224,9 @@ def create_app(eternity: Eternity, im_bridge=None) -> FastAPI:
             }
 
         return {
-            "yolo": {
-                "available": yolo_available,
-                "message": "YOLO icon detection ready" if yolo_available else "YOLO model not loaded - icon detection disabled",
+            "icon_finder": {
+                "available": icon_finder_available,
+                "message": "Icon finder ready" if icon_finder_available else "Icon finder model not loaded - icon detection disabled",
             },
             "im": im_status,
         }
