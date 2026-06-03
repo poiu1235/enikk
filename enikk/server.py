@@ -364,6 +364,8 @@ def create_app(eternity: Eternity, im_bridge=None) -> FastAPI:
     @app.post("/api/im/test")
     async def test_im_connection(req: IMTestRequest):
         """Test IM platform connection with given credentials."""
+        if im_bridge is None:
+            raise HTTPException(status_code=400, detail="IM bridge not configured")
         result = await im_bridge.test_connection(req.platform, req.token, req.extra)
         if result["status"] == "error":
             status_code = 400 if "Unknown platform" in result["message"] or "Unsupported" in result["message"] else 500
