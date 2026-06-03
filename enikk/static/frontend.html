@@ -247,6 +247,9 @@ const translations = {
       name_required: '请输入应用名称', path_required: '请选择可执行文件',
       save_failed: '保存失败', delete_failed: '删除失败',
       confirm_delete: '确定要删除应用 {name} 吗？'
+    },
+    status: {
+      yolo: 'YOLO', connected: '已连接', disconnected: '未连接'
     }
   },
   'en': {
@@ -286,6 +289,9 @@ const translations = {
       name_required: 'Please enter app name', path_required: 'Please select executable file',
       save_failed: 'Save failed', delete_failed: 'Delete failed',
       confirm_delete: 'Are you sure you want to delete app {name}?'
+    },
+    status: {
+      yolo: 'YOLO', connected: 'Connected', disconnected: 'Disconnected'
     }
   }
 };
@@ -640,6 +646,9 @@ function setLang(lang) {
   </div>
 </div>
 
+<!-- Main Layout Container -->
+<div class="flex flex-1 min-h-0">
+
 <!-- Floating toggle when sidebar is collapsed -->
 <button id="sidebar-toggle-floating"
   @click="toggleSidebar()"
@@ -696,20 +705,6 @@ function setLang(lang) {
       <div x-show="sessions.length === 0" class="text-center text-gray-400 text-xs mt-8" x-text="t('sidebar.no_conversations')"></div>
     </div>
 
-    <!-- IM Status -->
-    <div class="px-3 pb-2" x-show="imStatus.enabled">
-      <div class="flex items-center gap-2 px-2 py-1.5 text-xs rounded-lg"
-           :class="imStatus.connected ? 'text-green-700 bg-green-50' : 'text-red-700 bg-red-50'"
-           :title="t('sidebar.im_status')">
-        <span class="w-2 h-2 rounded-full flex-shrink-0"
-              :class="imStatus.connected ? 'bg-green-500' : 'bg-red-500'"></span>
-        <span class="truncate">
-          <span x-text="imStatus.platform || 'IM'"></span>
-          <span x-text="imStatus.connected ? ' ' + t('sidebar.connected') : ' ' + t('sidebar.disconnected')"></span>
-        </span>
-      </div>
-    </div>
-
     <!-- User -->
     <div class="p-3 border-t border-border relative">
       <div class="flex items-center gap-3 px-2 py-2 rounded-xl transition-all">
@@ -760,6 +755,31 @@ function setLang(lang) {
             <option value="zh-CN">中文</option>
             <option value="en">English</option>
           </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Status Bar -->
+    <div class="h-6 bg-gray-50 border-t border-border flex items-center px-3 text-xs text-gray-600 gap-4 flex-shrink-0">
+      <!-- YOLO Status -->
+      <div class="flex items-center gap-1.5 cursor-pointer relative" @click="yoloTooltip = !yoloTooltip">
+        <div class="w-2 h-2 rounded-full" :class="systemStatus.yolo?.available ? 'bg-green-500' : 'bg-red-500'"></div>
+        <span x-text="t('status.yolo')"></span>
+        <!-- Tooltip -->
+        <div x-show="yoloTooltip" @click.away="yoloTooltip = false" class="absolute bottom-full left-0 mb-2 px-3 py-2 bg-gray-800 text-white text-xs rounded shadow-lg z-50 whitespace-nowrap">
+          <div x-text="systemStatus.yolo?.message || ''"></div>
+          <div class="absolute top-full left-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800"></div>
+        </div>
+      </div>
+
+      <!-- IM Status -->
+      <div class="flex items-center gap-1.5 cursor-pointer relative" @click="imTooltip = !imTooltip" x-show="systemStatus.im?.enabled">
+        <div class="w-2 h-2 rounded-full" :class="systemStatus.im?.connected ? 'bg-green-500' : 'bg-red-500'"></div>
+        <span x-text="systemStatus.im?.platform || 'IM'"></span>
+        <!-- Tooltip -->
+        <div x-show="imTooltip" @click.away="imTooltip = false" class="absolute bottom-full left-0 mb-2 px-3 py-2 bg-gray-800 text-white text-xs rounded shadow-lg z-50 whitespace-nowrap">
+          <div x-text="systemStatus.im?.connected ? t('status.connected') : t('status.disconnected')"></div>
+          <div class="absolute top-full left-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800"></div>
         </div>
       </div>
     </div>
@@ -991,6 +1011,8 @@ function setLang(lang) {
   </div>
 </div>
 
+</div><!-- End Main Layout Container -->
+
 <script>
 function chatApp() {
   return {
@@ -1012,14 +1034,21 @@ function chatApp() {
     showUserMenu: false,
     showConfigModal: false,
     configTab: 'basic',
-    config: null,
+    config: {
+      model: { default: '', provider: '', base_url: '', api_key: '', max_tokens: 65535 },
+      im: { platforms: { qqbot: { enabled: false, token: '', extra: { app_id: '', client_secret: '' } } } },
+      workspace: { screenshot_dir: '', weights_dir: '', screenshot_max_dim: 1366 },
+      log_level: 'INFO'
+    },
     configSaving: false,
     imTesting: false,
     imTestResult: '',
     configSaved: false,
     modelTesting: false,
     modelTestResult: '',
-    imStatus: { enabled: false, connected: false, platform: null },
+    systemStatus: { yolo: { available: false, message: '' }, im: { enabled: false, connected: false, platform: null } },
+    yoloTooltip: false,
+    imTooltip: false,
     apps: [],
     showAppEditor: false,
     appEditor: { editing: false, name: '', app_path: '', launcher_path: '', launch_timeout: 120 },
@@ -1038,8 +1067,8 @@ function chatApp() {
         this.$nextTick(() => this.$refs.inputRef?.focus());
       });
       this.fetchSessions();
-      this.fetchIMStatus();
-      this._imStatusTimer = setInterval(() => this.fetchIMStatus(), 10000);
+      this.fetchSystemStatus();
+      this._systemStatusTimer = setInterval(() => this.fetchSystemStatus(), 5000);
       this.$nextTick(() => { this.initMarked(); });
       window.addEventListener('popstate', (e) => {
         const sessionId = e.state?.sessionId || new URLSearchParams(window.location.search).get('session');
@@ -1162,10 +1191,10 @@ function chatApp() {
       }
     },
 
-    async fetchIMStatus() {
+    async fetchSystemStatus() {
       try {
-        const resp = await fetch('/api/im/status');
-        if (resp.ok) this.imStatus = await resp.json();
+        const resp = await fetch('/api/status');
+        if (resp.ok) this.systemStatus = await resp.json();
       } catch (e) {
         // silent
       }

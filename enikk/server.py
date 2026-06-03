@@ -184,19 +184,34 @@ def create_app(eternity: Eternity, im_bridge=None) -> FastAPI:
 
         return {"status": "opened", "path": str(target)}
 
-    @app.get("/api/im/status")
-    def im_status():
-        """Return IM bridge connection status."""
+    @app.get("/api/status")
+    async def status():
+        """Get system status (YOLO, IM, etc.)."""
+        # YOLO status
+        yolo_available = False
+        if eternity._controller and eternity._controller.ui_parser:
+            yolo_available = eternity._controller.ui_parser.yolo_session is not None
+
+        # IM status
         if im_bridge is None:
-            return {"enabled": False, "connected": False, "platform": None}
-        adapter = getattr(im_bridge, '_adapter', None)
-        connected = getattr(adapter, 'is_connected', False) if adapter else False
-        active = im_bridge.config.im.active_platform
-        platform_name = active[0] if active else None
+            im_status = {"enabled": False, "connected": False, "platform": None}
+        else:
+            adapter = getattr(im_bridge, '_adapter', None)
+            connected = getattr(adapter, 'is_connected', False) if adapter else False
+            active = im_bridge.config.im.active_platform
+            platform_name = active[0] if active else None
+            im_status = {
+                "enabled": True,
+                "connected": bool(connected),
+                "platform": platform_name,
+            }
+
         return {
-            "enabled": True,
-            "connected": bool(connected),
-            "platform": platform_name,
+            "yolo": {
+                "available": yolo_available,
+                "message": "YOLO icon detection ready" if yolo_available else "YOLO model not loaded - icon detection disabled",
+            },
+            "im": im_status,
         }
 
     @app.get("/api/config")
