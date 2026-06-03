@@ -194,16 +194,21 @@ def create_app(eternity: Eternity, im_bridge=None) -> FastAPI:
 
         # IM status
         if im_bridge is None:
-            im_status = {"enabled": False, "connected": False, "platform": None}
+            im_status = {"enabled": False, "connected": False, "platform": None, "message": "IM bridge not configured"}
         else:
             adapter = getattr(im_bridge, '_adapter', None)
             connected = getattr(adapter, 'is_connected', False) if adapter else False
             active = im_bridge.config.im.active_platform
             platform_name = active[0] if active else None
+            if connected:
+                message = f"Connected to {platform_name}" if platform_name else "Connected"
+            else:
+                message = f"Disconnected from {platform_name}" if platform_name else "Disconnected"
             im_status = {
                 "enabled": True,
                 "connected": bool(connected),
                 "platform": platform_name,
+                "message": message,
             }
 
         return {
