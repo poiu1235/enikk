@@ -51,6 +51,18 @@ Runs entirely on your machine. Your data, screenshots, and credentials never lea
   <em>Web Dashboard - Configure everything with point-and-click</em>
 </p>
 
+<p align="center">
+  <img src="docs/images/enikk-app.jpg" alt="App Configuration" width="800" />
+  <br/>
+  <em>App Configuration - Register and manage your applications</em>
+</p>
+
+<p align="center">
+  <img src="docs/images/enikk-im-configuration.jpg" alt="IM Configuration" width="800" />
+  <br/>
+  <em>IM Configuration - Connect QQ Bot for remote control</em>
+</p>
+
 ---
 
 ## 🏗 Architecture
@@ -76,6 +88,16 @@ That's it. No installation, no Python, no dependencies.
 
 > [!NOTE]
 > Administrator privileges are required to control application windows and perform automated operations.
+
+---
+
+## 💬 Community
+
+Join our QQ group for questions, feedback, and updates:
+
+<p align="center">
+  <img src="docs/images/qq-group.png" alt="QQ Group" width="300" />
+</p>
 
 ---
 
