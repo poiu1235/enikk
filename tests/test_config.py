@@ -58,7 +58,7 @@ class TestWorkspaceConfig:
         assert "screenshots" in wc.screenshot_dir
         assert "weights" in wc.weights_dir
         assert wc.screenshot_max_dim == 1366
-        assert wc.max_iterations == 900
+        assert wc.max_iterations == 120
 
 
 # ── from_yaml ────────────────────────────────────────────────────────
