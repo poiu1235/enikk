@@ -53,16 +53,25 @@ def ensure_weights_ready(user_weights_dir: Path) -> None:
         logger.info(f"Copying weights from {bundle_weights} to {user_weights_dir}")
         user_weights_dir.mkdir(parents=True, exist_ok=True)
 
-        # Copy each weights subdirectory
-        for subdir in ['icon_detect', 'rapidocr']:
-            src = bundle_weights / subdir
-            if src.exists():
-                dst = user_weights_dir / subdir
-                if not dst.exists():
-                    shutil.copytree(src, dst)
-                    logger.info(f"Weights copied: {subdir}")
-            else:
-                logger.warning(f"Bundled weights missing {subdir} directory: {src}")
+        # Copy only the necessary ONNX model files (not training artifacts)
+        files_to_copy = [
+            ('icon_detect', ['model.onnx']),
+            ('rapidocr', ['ch_PP-OCRv4_det_infer.onnx', 'ch_PP-OCRv4_rec_infer.onnx', 'ch_ppocr_mobile_v2.0_cls_infer.onnx']),
+        ]
+
+        for subdir, files in files_to_copy:
+            src_dir = bundle_weights / subdir
+            dst_dir = user_weights_dir / subdir
+            dst_dir.mkdir(exist_ok=True)
+
+            for filename in files:
+                src_file = src_dir / filename
+                dst_file = dst_dir / filename
+                if src_file.exists() and not dst_file.exists():
+                    shutil.copy2(src_file, dst_file)
+                    logger.debug(f"Copied {subdir}/{filename}")
+                elif not src_file.exists():
+                    logger.warning(f"Missing bundled weight: {subdir}/{filename}")
 
     except Exception as e:
         logger.error(f"Failed to copy weights: {e}")

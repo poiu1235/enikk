@@ -107,7 +107,7 @@ class Eternity:
         *,
         model: str | None = None,
         system_message: str | None = None,
-        max_iterations: int = 900,
+        max_iterations: int | None = None,
         session_id: str | None = None,
     ) -> str:
         """Create a session and start the agent in a background thread.
@@ -135,6 +135,8 @@ class Eternity:
             _publish(EVT_TOOL_RESULT, data)
 
         mc = self.config.model
+        if max_iterations is None:
+            max_iterations = self.config.workspace.max_iterations
         try:
             agent = run_agent.AIAgent(
                 base_url=mc.base_url or None,

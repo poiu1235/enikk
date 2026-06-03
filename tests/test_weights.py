@@ -120,6 +120,7 @@ class TestEnsureWeightsReady:
         bundle_rapidocr.mkdir(parents=True)
         (bundle_rapidocr / "ch_PP-OCRv4_det_infer.onnx").write_text("bundle det")
         (bundle_rapidocr / "ch_PP-OCRv4_rec_infer.onnx").write_text("bundle rec")
+        (bundle_rapidocr / "ch_ppocr_mobile_v2.0_cls_infer.onnx").write_text("bundle cls")
 
         # Setup user directory (empty)
         user_weights = tmp_path / "user_weights"
@@ -136,6 +137,8 @@ class TestEnsureWeightsReady:
             user_rapidocr = user_weights / "rapidocr"
             assert user_rapidocr.exists()
             assert (user_rapidocr / "ch_PP-OCRv4_det_infer.onnx").exists()
+            assert (user_rapidocr / "ch_PP-OCRv4_rec_infer.onnx").exists()
+            assert (user_rapidocr / "ch_ppocr_mobile_v2.0_cls_infer.onnx").exists()
 
     def test_no_bundle_weights(self, tmp_path):
         """Test when no bundle weights are available."""
@@ -147,18 +150,41 @@ class TestEnsureWeightsReady:
             # User directory should NOT be created when no bundle weights
             assert not user_weights.exists()
 
-    def test_bundle_missing_icon_detect(self, tmp_path):
-        """Test when bundle exists but icon_detect directory is missing."""
+    def test_bundle_missing_files(self, tmp_path):
+        """Test when bundle exists but weight files are missing."""
         bundle_dir = tmp_path / "bundle"
         bundle_dir.mkdir()
         bundle_weights = bundle_dir / "weights"
         bundle_weights.mkdir()
-        # Don't create icon_detect subdirectory
+        # Don't create any weight files
 
         user_weights = tmp_path / "user_weights"
 
         with patch('enikk.weights.get_bundle_weights_dir', return_value=bundle_weights):
             ensure_weights_ready(user_weights)
-            # Should handle gracefully
+            # Should handle gracefully - directories created but no files
             assert user_weights.exists()
-            assert not (user_weights / "icon_detect").exists()
+            assert not (user_weights / "icon_detect" / "model.onnx").exists()
+            assert not (user_weights / "rapidocr" / "ch_PP-OCRv4_det_infer.onnx").exists()
+
+    def test_does_not_copy_training_artifacts(self, tmp_path):
+        """Test that training artifacts (model.pt, model.yaml) are not copied."""
+        bundle_dir = tmp_path / "bundle"
+        bundle_dir.mkdir()
+        bundle_weights = bundle_dir / "weights"
+        bundle_icon_detect = bundle_weights / "icon_detect"
+        bundle_icon_detect.mkdir(parents=True)
+        (bundle_icon_detect / "model.onnx").write_text("onnx model")
+        (bundle_icon_detect / "model.pt").write_text("pytorch model")
+        (bundle_icon_detect / "model.yaml").write_text("training config")
+        (bundle_icon_detect / "train_args.yaml").write_text("train args")
+
+        user_weights = tmp_path / "user_weights"
+
+        with patch('enikk.weights.get_bundle_weights_dir', return_value=bundle_weights):
+            ensure_weights_ready(user_weights)
+            # Only ONNX model should be copied
+            assert (user_weights / "icon_detect" / "model.onnx").exists()
+            assert not (user_weights / "icon_detect" / "model.pt").exists()
+            assert not (user_weights / "icon_detect" / "model.yaml").exists()
+            assert not (user_weights / "icon_detect" / "train_args.yaml").exists()
