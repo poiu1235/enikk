@@ -86,8 +86,8 @@ git clone https://github.com/gtt116/enikk.git
 cd enikk
 uv venv --seed
 .venv\Scripts\Activate.ps1
-pip install -e .
-enikk daemon
+uv pip install -e .
+enikk
 ```
 
 ### Build Executable
