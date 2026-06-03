@@ -1,354 +1,188 @@
+<p align="center">
+  <img src="enikk/static/enikk-logo.png" alt="Enikk Logo" width="128" />
+</p>
+
 # Enikk
 
-Self-improving GUI Agent for desktop automation, built on [hermes-agent](https://github.com/NousResearch/hermes-agent).
+**Self-improving GUI Agent Framework for desktop automation.**
 
-Enikk exposes an HTTP API and IM bridge that lets AI agents orchestrate desktop automation tasks. It captures screenshots, detects UI elements via YOLO + OCR, and simulates input to automate workflows in games and applications.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey)]()
 
-## Features
+Enikk is an AI agent that watches your screen, understands what it sees, and operates any desktop application — autonomously. It learns from experience, extracts reusable skills, and gets smarter every time you use it.
 
-- **HTTP API** — FastAPI server with endpoints for screenshots, state detection, clicks, and agent control
-- **IM Bridge** — Chat with your agent via DingTalk or QQ
-- **Web Dashboard** — Real-time SSE streaming of agent actions, tool calls, and results
-- **Session Management** — Persistent sessions with conversation history and steer capability
-- **UI Parsing** — YOLO icon detection + RapidOCR text recognition with normalized [0,1000] coordinates
-- **Self-Improving** — Post-session reviews extract lessons to persistent memory
-- **Multi-Model Support** — Works with any OpenAI-compatible API (Qwen, Claude, GPT, etc.)
+---
 
-## Architecture
+## ✨ Key Features
+
+### 🧠 Self-improving
+
+After each task, Enikk automatically reviews what happened and extracts reusable skills into persistent memory. The agent gets smarter the more you use it — no manual training needed.
+
+### 💰 Progressive Perception
+
+Enikk uses a 3-layer perception pipeline that minimizes token cost:
+
+| Layer | What it does | Cost |
+|---|---|---|
+| **L1 — Structured** | YOLO icon detection + OCR text → bounding boxes + text | Very low |
+| **L2 — Text LLM** | Standard LLM makes decisions from structured data | Low |
+| **L3 — Vision LLM** | Falls back to VLM only when text isn't enough | Higher |
+
+> 90%+ of operations never need VLM — cutting token costs by **5–10×**.
+
+### 📝 Natural Language Teachable
+
+Teach Enikk new operations through plain text. Define application configs in YAML and describe desired behaviors in natural language. **Zero fine-tuning** — just configure and go.
+
+### 🔌 Multi-app Orchestration
+
+Manage multiple desktop applications simultaneously. Enikk auto-discovers running apps, locates their windows, and can autonomously switch between them during a task.
+
+### 👁️ Fully Observable
+
+Every screenshot, bounding box, OCR result, reasoning step, and tool call is visible in real-time. No black boxes — you see exactly what the agent sees and does.
+
+---
+
+## 🏗 Architecture
 
 ```
-CLI (cli.py) ──HTTP──▶ FastAPI Server (server.py) ──▶ Eternity (session manager)
-                                                      ├── AIAgent (hermes-agent)
-                                                      ├── StreamChannel (pub/sub)
-                                                      └── IMBridge (gateway adapters)
-
-Server ──▶ AppController ──▶ Daemon
-                              ├── ProcessManager (launch/login/game)
-                              ├── CaptureMethod (pyautogui)
-                              ├── GameAnalyzer (RapidOCR + CV)
-                              ├── UIParser (YOLO + OCR fusion)
-                              └── Input (pyautogui/win32)
+┌─────────────────────────────────────────────────────────┐
+│                    Enikk Desktop App                     │
+│                                                          │
+│  ┌──────────┐    ┌──────────────┐    ┌───────────────┐  │
+│  │ Screenshot │──▶│  UI Parser    │──▶│ AppController  │  │
+│  │  (Screen)  │    │ YOLO + OCR   │    │ (Input/Win)    │  │
+│  └──────────┘    └──────────────┘    └───────┬───────┘  │
+│                                               │         │
+│                          ┌────────────────────┘         │
+│                          ▼                              │
+│  ┌──────────────────────────────────────────────────┐  │
+│  │               Eternity (Session Manager)          │  │
+│  │                                                  │  │
+│  │  ┌─────────────┐  ┌──────────┐  ┌────────────┐  │  │
+│  │  │  AIAgent    │  │ SSE Pub  │  │ IM Bridge  │  │  │
+│  │  │ (Hermes)    │  │  /Sub    │  │   (QQ)     │  │  │
+│  │  └─────────────┘  └──────────┘  └────────────┘  │  │
+│  └──────────────────────────────────────────────────┘  │
+│                          │                              │
+│                          ▼                              │
+│  ┌──────────────────────────────────────────────────┐  │
+│  │        Built-in Web Dashboard (WebView)           │  │
+│  │         SSE Streaming · Config Editor             │  │
+│  └──────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────┘
 ```
 
-## Installation
+**Data flow:**
+1. **Capture** — Take a screenshot of the target application window
+2. **Parse** — YOLO detects UI elements, OCR reads text, results normalized to `[0,1000]` coordinates
+3. **Decide** — LLM analyzes structured data and decides what to do
+4. **Act** — Click, type, or wait based on the decision
+5. **Review** — After the session, lessons are extracted to persistent skill files
 
-### Prerequisites
+---
 
-- Python 3.10+
-- Windows 10/11 (for window capture and input simulation)
-- hermes-agent (installed as dependency)
+## 🚀 Getting Started
 
-### Install hermes-agent
+### Download & Run
 
-Enikk is built on hermes-agent, which provides the AI agent framework, tool system, and gateway adapters.
+1. **Download** the latest release from [GitHub Releases](https://github.com/gtt116/enikk/releases)
+2. **Extract** the zip file
+3. **Run** `enikk.exe` as Administrator (UAC prompt will appear)
+4. **Open** — the dashboard opens automatically in a native window
 
-```bash
-pip install hermes-agent
-```
+That's it. No installation, no Python, no dependencies.
 
-hermes-agent will be installed automatically when you install enikk, but you can install it separately if you want to use its CLI first:
+> [!NOTE]
+> Administrator privileges are required to control application windows and perform automated operations.
 
-```bash
-# Check hermes is installed
-hermes --version
+---
 
-# Run hermes setup wizard (configures LLM provider, tools, etc.)
-hermes setup
-```
+## 🎮 Supported Applications
 
-The hermes setup wizard configures:
-- **Model & Provider** — API key and endpoint for your LLM (OpenAI, Anthropic, local models)
-- **Terminal Backend** — Optional shell command execution
-- **Agent Settings** — Max iterations, context length, etc.
-- **Messaging Platforms** — IM bot tokens (DingTalk, QQ, etc.)
-- **Tools** — Enable/disable bundled tools
+Enikk can control **any Windows desktop application**. Built-in app profiles:
 
-Configuration is stored in `~/.hermes/config.yaml` and `~/.hermes/.env`.
+| App | Profile | Notes |
+|---|---|---|
+| NIKKE | ✅ Built-in | Game automation |
+| Wuthering Waves | ✅ Built-in | Game automation |
+| Any Windows app | ✅ Custom | Add via config |
 
-### Install Enikk
+### Adding a Custom App
 
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/enikk.git
-cd enikk
+Open the **Settings** page in the dashboard, fill in your app's path and name, and click **Save**. Enikk will auto-discover the window and start operating.
 
-# Create virtual environment
-uv venv --seed
-.venv\Scripts\Activate.ps1  # Windows
-# source .venv/bin/activate  # Linux/Mac
+---
 
-# Install in editable mode
-uv pip install -e .
-```
+## 🤖 IM Bridge
 
-### Export YOLO Model to ONNX
+Talk to Enikk through your favorite messaging platform. Supported:
 
-Enikk uses ONNX Runtime for YOLO inference instead of PyTorch to reduce startup time and dependencies. The pre-trained model needs to be exported once:
+- **QQ**
 
-```bash
-# Install ultralytics temporarily for export
-pip install ultralytics
+Each chat session maps to an independent Enikk session with full conversation history and streaming.
 
-# Export the model
-python scripts/export_yolo_onnx.py weights/icon_detect/model.pt
-```
-
-This creates `weights/icon_detect/model.onnx` (~77MB). The original `.pt` file is no longer needed at runtime.
-
-### Configure Enikk
-
-Copy the example config and edit it:
-
-```bash
-cp config.example.yaml config.yaml
-# Edit config.yaml with your settings
-```
-
-Key configuration sections:
+Configure in `config.yaml`:
 
 ```yaml
-# LLM model settings
-model:
-  default: "qwen3.6-plus"
-  base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
-  api_key: "sk-your-api-key"
-  max_tokens: 4096
-
-# IM bridge (optional)
 im:
-  platforms:
-    dingtalk:
-      enabled: true
-      token: "your-dingtalk-token"
-
-# Server settings
-server:
-  host: "127.0.0.1"
-  port: 18931
+  qqbot:
+    enabled: true
+    app_id: "..."
+    app_secret: "..."
 ```
 
-## Usage
+---
 
-### Start the daemon
+## 🛠 For Developers
+
+### Build from Source
 
 ```bash
-# Config is loaded from {home_dir}/config.yaml
-enikk
-
-# Or specify a custom home directory
-enikk --home-dir /path/to/custom/home
+git clone https://github.com/gtt116/enikk.git
+cd enikk
+uv venv --seed
+.venv\Scripts\Activate.ps1
+pip install -e .
+enikk daemon
 ```
 
-The daemon starts the HTTP server and IM bridge (if configured). You'll see:
+### Build Executable
 
-```
-  _____   _   _  _____  _  __  _  __
- |  ___| | \ | ||_   _|| |/ / | |/ /
- | |__   |  \| |  | |  | ' /  | ' /
- |  __|  | . ` |  | |  |  <   |  <
- | |___  | |\  | _| |_ | . \  | . \
- |_____| |_| \_||_____||_|\_\ |_|\_\
+```powershell
+# Debug build (with console)
+.\build.bat
 
- Enikk - Self-improving GUI Agent
-
- Dashboard: http://127.0.0.1:18931/
+# Release build (without console)
+.\build.bat --release
 ```
 
-### Web Dashboard
+Generated files:
+- Debug mode: `dist/enikk-debug/enikk-debug.exe`
+- Release mode: `dist/enikk/enikk.exe` and `dist/enikk.zip`
 
-Open http://127.0.0.1:18931/ in your browser. The dashboard provides:
+> [!IMPORTANT]
+> Release executable requires administrator privileges (UAC) to run. It will prompt for confirmation when launched.
 
-- **Session list** — View and switch between agent sessions
-- **Chat interface** — Send tasks and follow-up messages
-- **Real-time streaming** — Watch tool calls and results as they happen
-- **Screenshot viewer** — See what the agent sees
-- **URL sync** — Session ID appears in URL for sharing/bookmarking
+---
 
-### IM Bridge
+## 📦 Dependencies & Credits
 
-Chat with your agent via your configured IM platform:
+Enikk stands on the shoulders of giants:
 
-```
-You: Launch the game and navigate to daily missions
-🤖: [streams tool calls and results]
-    [sends screenshots when tools capture them]
-    [sends final response when done]
+| Project | License | Role |
+|---|---|---|
+| [Hermes Agent](https://github.com/NousResearch/hermes-agent) (NousResearch) | MIT | AI Agent framework, tool system, memory, gateway |
+| [OmniParser](https://github.com/microsoft/OmniParser) (Microsoft) | CC-BY-4.0 | YOLO model weights for UI element detection |
+| [RapidOCR](https://github.com/RapidAI/RapidOCR) | Apache 2.0 | ONNX-based Chinese OCR engine |
 
-You: /new Start a new session
-🤖: [stops previous session, starts fresh]
+Enikk's own code is **MIT License** — see [LICENSE](LICENSE).
 
-You: /stop
-🤖: 🛑 已停止会话: abc123
+---
 
-You: /tools
-🤖: 🔧 工具调用通知: 🔕 已关闭
+## 📄 License
 
-You: /help
-🤖: 🤖 **Enikk 助手**
-    🆕 /new [提示词] - 新建会话
-    🛑 /stop - 停止当前会话
-    🔧 /tools - 切换工具调用通知
-    ℹ️ /help - 显示帮助
-```
-
-### CLI Commands
-
-```bash
-# Take a screenshot (requires daemon running)
-enikk screenshot -o screen.jpg
-
-# Click at coordinates [0,1000] (requires daemon running)
-enikk click 500 300
-
-# Run agent directly (one-shot, no daemon)
-enikk agent "navigate to settings"
-enikk agent "complete the current event" --model qwen3.6-plus
-```
-
-## API Endpoints
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/health` | Health check |
-| GET | `/api/state` | Current game state (on-demand capture + analyze) |
-| GET | `/api/state/stream` | SSE state stream |
-| GET | `/api/screenshot` | Screenshot base64 + OCR + YOLO UI elements |
-| GET | `/api/process` | Game process info |
-| POST | `/api/action/launch` | Launch game (async, returns immediately) |
-| GET | `/api/action/click` | Click at (x, y) — normalized [0,1000] |
-| POST | `/api/action/exit` | Terminate game |
-| GET | `/api/info` | API metadata + endpoint list |
-| POST | `/api/sessions` | Create new agent session |
-| POST | `/api/sessions/{id}/steer` | Send follow-up message to running session |
-| GET | `/api/sessions/{id}/stream` | SSE stream of agent events |
-| GET | `/api/sessions` | List recent sessions |
-| DELETE | `/api/sessions/{id}` | Delete a session |
-
-## Configuration
-
-### config.example.yaml
-
-```yaml
-# Model configuration
-model:
-  default: "qwen3.6-plus"
-  base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
-  api_key: "sk-your-api-key-here"
-  max_tokens: 4096
-
-# Server settings
-server:
-  host: "127.0.0.1"
-  port: 18931
-
-# Logging
-log_level: "INFO"
-
-# IM bridge (optional — uncomment to enable)
-# im:
-#   platforms:
-#     dingtalk:
-#       enabled: true
-#       token: "your-dingtalk-bot-token"
-#     qqbot:
-#       enabled: true
-#       extra:
-#         app_id: "your-qq-app-id"
-#         client_secret: "your-qq-bot-secret"
-#         markdown_support: true
-
-# Custom apps (optional — for game-specific automation)
-# apps:
-#   nikke:
-#     launcher_path: "D:\\NIKKE\\launcher.exe"
-#     game_path: "D:\\NIKKE\\game.exe"
-#     window_title: "NIKKE"
-```
-
-### Environment Variables
-
-You can also configure via environment variables (override config.yaml):
-
-```bash
-export ENIKK_MODEL_API_KEY="sk-your-api-key"
-export ENIKK_MODEL_BASE_URL="https://api.openai.com/v1"
-export ENIKK_MODEL_DEFAULT="gpt-4o"
-export ENIKK_SERVER_HOST="0.0.0.0"
-export ENIKK_SERVER_PORT="8080"
-```
-
-## Development
-
-```bash
-# Install development dependencies
-uv pip install -e ".[dev]"
-
-# Run tests
-pytest
-
-# Type checking
-mypy enikk
-
-# Linting
-ruff check enikk
-```
-
-## How It Works
-
-### Session Lifecycle
-
-1. **Create session** — User sends a task via web dashboard or IM
-2. **Agent thread** — Eternity spawns a background thread running hermes AIAgent
-3. **Tool calls** — Agent calls tools (screenshot, click, wait) via AppController
-4. **Streaming** — StreamChannel publishes events to SSE subscribers (web + IM)
-5. **Completion** — Agent finishes, final response sent to all subscribers
-6. **Persistence** — Session history saved to SessionDB for future context
-
-### UI Parsing Pipeline
-
-```
-Screenshot (pyautogui)
-    ↓
-Compress to max 1366px
-    ↓
-    ├── RapidOCR → text detections
-    └── YOLO → icon detections
-    ↓
-Overlap resolution (prefer OCR text inside YOLO boxes)
-    ↓
-Normalize bboxes to [0,1000]
-    ↓
-UI elements with labels and coordinates
-```
-
-### IM Bridge Architecture
-
-Enikk reuses hermes-agent's gateway platform adapters (DingTalk, QQ, etc.) without reimplementing protocol logic:
-
-```
-IM Message (DingTalk/QQ/etc.)
-    ↓
-hermes PlatformAdapter
-    ↓
-IMBridge._handle_message()
-    ↓
-Eternity session (create or steer)
-    ↓
-StreamChannel events
-    ↓
-GatewayStreamConsumer (progressive message updates)
-    ↓
-IM Response (with tool call hints and screenshots)
-```
-
-## License
-
-MIT License. See [LICENSE](LICENSE).
-
-## Contributing
-
-Contributions welcome! Please open an issue or PR on GitHub.
-
-## Acknowledgments
-
-Built on [hermes-agent](https://github.com/NousResearch/hermes-agent) by NousResearch.
+MIT License — see [LICENSE](LICENSE) for details.
