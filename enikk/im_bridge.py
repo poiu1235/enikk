@@ -421,7 +421,8 @@ class IMBridge:
         active = self.config.im.active_platform
         return active[0] if active else None
 
-    async def test_connection(self, platform: str, token: str, extra: dict | None = None) -> dict:
+    @staticmethod
+    async def test_connection(platform: str, token: str, extra: dict | None = None) -> dict:
         """Test connection to an IM platform with given credentials.
 
         Args:
@@ -448,7 +449,7 @@ class IMBridge:
             extra=extra or {},
         )
 
-        adapter = self._create_adapter(platform_enum, pcfg)
+        adapter = IMBridge._create_adapter(None, platform_enum, pcfg)
         if not adapter:
             return {"status": "error", "message": f"Unsupported platform: {platform}"}
 
