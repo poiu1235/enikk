@@ -32,11 +32,11 @@ const translations = {
       load_more: '加载更多...', thinking: '思考中...', thought: '思考过程',
       call: '调用', step: '步骤', copy: '复制', message_placeholder: '输入消息...',
       stop: '停止', send: '发送',
-      stop_hint: '发送 "/stop" 停止当前任务',
-      teach_hint: 'Agent 找不到按钮？你可以教它：截图中的 [244, 234] 就是坐标，告诉它「点击 [244, 234]」即可。',
-      images_hint: 'IM 里发送 "/images" 可以开关图片的回显',
-      admin_hint: '请使用管理员权限运行 Enikk，如此它才能启动 app 进程。',
-      mouse_hint: 'Enikk 运行过程中会挪动鼠标指针哦，建议使用 IM 遥控 Enikk，这样你们两就不会因为抢鼠标而吵架'
+      stop_hint: '🛑 发送 "/stop" 停止当前任务',
+      teach_hint: '👆 Agent 找不到按钮？你可以教它：截图中的 [244, 234] 就是坐标，告诉它「点击 [244, 234]」即可。',
+      images_hint: '📷 IM 里发送 "/images" 可以开关图片的回显',
+      admin_hint: '🔐 请使用管理员权限运行 Enikk，如此它才能启动 app 进程。',
+      mouse_hint: '🖱️ Enikk 运行过程中会挪动鼠标指针哦，建议使用 IM 遥控 Enikk，这样你们两就不会因为抢鼠标而吵架'
     },
     time: { today: '今天', yesterday: '昨天', last_7_days: '最近7天', older: '更早' },
     apps: {
@@ -86,11 +86,11 @@ const translations = {
       load_more: 'Load more...', thinking: 'Thinking...', thought: 'Thought',
       call: 'call', step: 'Step', copy: 'Copy', message_placeholder: 'Message Enikk',
       stop: 'Stop', send: 'Send',
-      stop_hint: 'Send "/stop" to stop current task',
-      teach_hint: 'Agent can\'t find the button? You can teach it: [244, 234] in the screenshot is the coordinate. Tell it "click [244, 234]".',
-      images_hint: 'Send "/images" in IM to toggle image display',
-      admin_hint: 'Please run Enikk as administrator so it can launch app processes.',
-      mouse_hint: 'Enikk will move the mouse pointer during operation. Consider using IM to control it remotely, so you won\'t fight over the mouse'
+      stop_hint: '🛑 Send "/stop" to stop current task',
+      teach_hint: '👆 Agent can\'t find the button? You can teach it: [244, 234] in the screenshot is the coordinate. Tell it "click [244, 234]".',
+      images_hint: '📷 Send "/images" in IM to toggle image display',
+      admin_hint: '🔐 Please run Enikk as administrator so it can launch app processes.',
+      mouse_hint: '🖱️ Enikk will move the mouse pointer during operation. Consider using IM to control it remotely, so you won\'t fight over the mouse'
     },
     time: { today: 'Today', yesterday: 'Yesterday', last_7_days: 'Last 7 days', older: 'Older' },
     apps: {
