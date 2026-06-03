@@ -23,6 +23,7 @@ dependencies = [
     "onnxruntime==1.26.0",
     "pywebview==6.2.1",
     "hermes-agent==0.14.0",
+    "aiohttp==3.9.1",
 ]
 
 [project.optional-dependencies]
