@@ -57,6 +57,7 @@ def main():
     from .eternity import Eternity
     from .server import create_app, start_server
     from .webview_api import start_webview
+    from .weights import ensure_weights_ready
 
     if sys.platform == 'win32':
         sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
@@ -96,6 +97,9 @@ def main():
     # Ensure workspace directories exist
     Path(cfg.workspace.screenshot_dir).mkdir(parents=True, exist_ok=True)
     Path(cfg.workspace.weights_dir).mkdir(parents=True, exist_ok=True)
+
+    # Ensure weights are ready (copy from bundle if needed)
+    ensure_weights_ready(Path(cfg.workspace.weights_dir))
 
     # Also write logs to home/logs/enikk.log (rotate 5 files × 10MB)
     log_dir = _enikk_home_path / "logs"
