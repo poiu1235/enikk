@@ -209,6 +209,7 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon=os.path.join(ENIKK_PKG, 'static', 'enikk-logo.ico'),
+    uac_admin=True,
 )
 
 coll = COLLECT(
