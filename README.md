@@ -13,7 +13,7 @@
 Enikk is an AI agent that watches your screen, understands what it sees, and operates any desktop application — autonomously. It learns from experience, extracts reusable skills, and gets smarter every time you use it.
 
 <p align="center">
-  <img src="docs/images/enikk-home-page.jpg" alt="Enikk Dashboard" width="800" />
+  <img src="docs/images/enikk-home-page.jpg" alt="Enikk Dashboard" width="1200" />
 </p>
 
 ---
@@ -46,19 +46,19 @@ Runs entirely on your machine. Your data, screenshots, and credentials never lea
 ## 📸 Demo
 
 <p align="center">
-  <video src="docs/videos/enikk-model-configuration-h265.mp4" width="800" autoplay loop muted></video>
+  <video src="https://github.com/gtt116/enikk/raw/main/docs/videos/enikk-model-configuration-h265.mp4" width="1200" autoplay loop muted></video>
   <br/>
   <em>Model Configuration - Point-and-click setup</em>
 </p>
 
 <p align="center">
-  <video src="docs/videos/enikk-im-configuration-h265.mp4" width="800" autoplay loop muted></video>
+  <video src="https://github.com/gtt116/enikk/raw/main/docs/videos/enikk-im-configuration-h265.mp4" width="1200" autoplay loop muted></video>
   <br/>
   <em>IM Configuration - Connect QQ Bot for remote control</em>
 </p>
 
 <p align="center">
-  <img src="docs/images/netease-music.jpg" alt="Netease Cloud Music" width="800" />
+  <img src="docs/images/netease-music.jpg" alt="Netease Cloud Music" width="1200" />
   <br/>
   <em>Real-world Demo - Enikk controlling Netease Cloud Music</em>
 </p>
