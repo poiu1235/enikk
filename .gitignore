@@ -19,7 +19,6 @@ trajectories/
 models_dev_cache.json
 SOUL.md
 view.py
-uv.lock
 failed_trajectories.jsonl
 
 # IDE & Editor

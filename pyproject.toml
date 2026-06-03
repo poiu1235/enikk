@@ -6,22 +6,22 @@ build-backend = "setuptools.build_meta"
 name = "enikk"
 version = "0.1.0"
 description = "Enikk: Self-improving GUI Agent."
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
-    "fastapi>=0.110",
-    "uvicorn>=0.27",
-    "opencv-python>=4.9",
-    "numpy>=1.26",
-    "psutil>=5.9",
-    "pywin32>=306",
-    "rapidocr-onnxruntime>=1.3",
-    "pyyaml>=6.0",
-    "pyautogui>=0.9",
-    "pynput>=1.7",
-    "mss>=10.0",
-    "Pillow>=10.0",
-    "onnxruntime>=1.16",
-    "pywebview>=5.0",
+    "fastapi==0.136.1",
+    "uvicorn==0.46.0",
+    "opencv-python==4.13.0.92",
+    "numpy==2.4.4",
+    "psutil==7.2.2",
+    "pywin32==311",
+    "rapidocr-onnxruntime==1.4.4",
+    "pyyaml==6.0.3",
+    "pyautogui==0.9.54",
+    "pynput==1.8.1",
+    "mss==10.2.0",
+    "Pillow==12.2.0",
+    "onnxruntime==1.26.0",
+    "pywebview==6.2.1",
     "hermes-agent==0.14.0",
 ]
 
