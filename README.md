@@ -68,6 +68,8 @@ https://github.com/user-attachments/assets/9ac22c98-672d-4652-9f17-258476152cc2
   <img src="docs/images/netease-music.jpg" alt="Netease Cloud Music" width="1200" />
   <br/>
   <em>Real-world Demo - Enikk controlling Netease Cloud Music</em>
+  <br/>
+  <a href="https://www.youtube.com/watch?v=oYyria7cMSk">▶ Watch demo on YouTube</a>
 </p>
 
 ---
