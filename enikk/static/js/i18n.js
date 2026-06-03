@@ -49,7 +49,7 @@ const translations = {
       advanced_warning: '⚠️ 以下配置项通常无需修改，仅在特殊情况下调整'
     },
     status: {
-      icon_finder: 'Icon Finder', im: 'IM', connected: '已连接', disconnected: '未连接'
+      icon_finder: 'Icon Finder', ocr: 'OCR', im: 'IM', connected: '已连接', disconnected: '未连接'
     }
   },
   'en': {
@@ -100,7 +100,7 @@ const translations = {
       advanced_warning: '⚠️ These settings typically do not need to be modified. Only adjust if you know what you are doing.'
     },
     status: {
-      icon_finder: 'Icon Finder', im: 'IM', connected: 'Connected', disconnected: 'Disconnected'
+      icon_finder: 'Icon Finder', ocr: 'OCR', im: 'IM', connected: 'Connected', disconnected: 'Disconnected'
     }
   }
 };

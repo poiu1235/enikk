@@ -381,3 +381,17 @@ class Eternity:
         handle.thread.join(timeout=timeout)
         return handle.result
 
+    # ── Public status API ────────────────────────────────────────────────
+
+    def get_icon_finder_available(self) -> bool:
+        """Check if YOLO icon finder is ready."""
+        if self._controller and self._controller.ui_parser:
+            return self._controller.ui_parser.yolo_session is not None
+        return False
+
+    def get_ocr_available(self) -> bool:
+        """Check if OCR engine is ready."""
+        if self._controller and self._controller.ui_parser:
+            return hasattr(self._controller.ui_parser, 'ocr') and self._controller.ui_parser.ocr is not None
+        return False
+

@@ -200,9 +200,10 @@ def create_app(eternity: Eternity, im_bridge=None) -> FastAPI:
     async def status():
         """Get system status (icon finder, IM, etc.)."""
         # Icon finder status
-        icon_finder_available = False
-        if eternity._controller and eternity._controller.ui_parser:
-            icon_finder_available = eternity._controller.ui_parser.yolo_session is not None
+        icon_finder_available = eternity.get_icon_finder_available()
+
+        # OCR status
+        ocr_available = eternity.get_ocr_available()
 
         # IM status
         if im_bridge is None:
@@ -227,6 +228,10 @@ def create_app(eternity: Eternity, im_bridge=None) -> FastAPI:
             "icon_finder": {
                 "available": icon_finder_available,
                 "message": "Icon finder ready" if icon_finder_available else "Icon finder model not loaded - icon detection disabled",
+            },
+            "ocr": {
+                "available": ocr_available,
+                "message": "OCR ready" if ocr_available else "OCR not loaded",
             },
             "im": im_status,
         }
