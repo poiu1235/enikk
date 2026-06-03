@@ -29,10 +29,6 @@ Enikk uses a multi-layer perception system (YOLO + OCR + VLM) that minimizes AI 
 ### ⚡ Zero Code Required
 Configure everything through the Web Dashboard. No programming, no scripts, no YAML editing — just point-and-click setup.
 
-<p align="center">
-  <img src="docs/images/enikk-configuration.jpg" alt="Configuration Dashboard" width="800" />
-</p>
-
 ### 🖥️ Multi-app Support
 Control multiple applications simultaneously. Enikk auto-discovers windows and can switch between apps during a task.
 
@@ -44,6 +40,16 @@ Watch every step in the Web Dashboard: screenshots, detected elements, reasoning
 
 ### 🔒 Local & Private
 Runs entirely on your machine. Your data, screenshots, and credentials never leave your computer (except for AI API calls).
+
+---
+
+## 📸 Screenshots
+
+<p align="center">
+  <img src="docs/images/enikk-configuration.jpg" alt="Configuration Dashboard" width="800" />
+  <br/>
+  <em>Web Dashboard - Configure everything with point-and-click</em>
+</p>
 
 ---
 
