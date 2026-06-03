@@ -1,11 +1,9 @@
 """Enikk daemon entry point."""
 import argparse
 import asyncio
-import io
 import logging
 import logging.handlers
 import os
-import sys
 import threading
 from pathlib import Path
 
@@ -58,10 +56,6 @@ def main():
     from .server import create_app, start_server
     from .webview_api import start_webview
     from .weights import ensure_weights_ready
-
-    if sys.platform == 'win32':
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
     logo = (r"""
   _____   _   _  _____  _  __  _  __
