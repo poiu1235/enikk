@@ -1044,7 +1044,7 @@ function setLang(lang) {
     <div class="text-center text-gray-400 text-xs mt-2">
       <p>
         <span class="text-gray-500">Tips:</span>
-        <span x-text="currentTipIndex === 0 ? t('chat.stop_hint') : t('chat.teach_hint')"></span>
+        <span x-text="getCurrentTip()"></span>
       </p>
     </div>
   </div>
@@ -1097,6 +1097,9 @@ function chatApp() {
     _showJumpBottom: false,
     currentLang: 'zh-CN',
     currentTipIndex: 0,
+    getCurrentTip() {
+      return this.currentTipIndex === 0 ? this.t('chat.stop_hint') : this.t('chat.teach_hint');
+    },
     // Register currentLang as a reactive dependency so Alpine re-evaluates all t() bindings when language changes
     t(key, ...args) { void this.currentLang; return t(key, ...args); },
 
