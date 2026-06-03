@@ -43,12 +43,18 @@ Runs entirely on your machine. Your data, screenshots, and credentials never lea
 
 ---
 
-## 📸 Screenshots
+## 📸 Demo
 
 <p align="center">
-  <img src="docs/images/enikk-configuration.jpg" alt="Configuration Dashboard" width="800" />
+  <video src="docs/videos/enikk-model-configuration-h265.mp4" width="800" autoplay loop muted></video>
   <br/>
-  <em>Web Dashboard - Configure everything with point-and-click</em>
+  <em>Model Configuration - Point-and-click setup</em>
+</p>
+
+<p align="center">
+  <video src="docs/videos/enikk-im-configuration-h265.mp4" width="800" autoplay loop muted></video>
+  <br/>
+  <em>IM Configuration - Connect QQ Bot for remote control</em>
 </p>
 
 <p align="center">
