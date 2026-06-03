@@ -364,40 +364,12 @@ def create_app(eternity: Eternity, im_bridge=None) -> FastAPI:
     @app.post("/api/im/test")
     async def test_im_connection(req: IMTestRequest):
         """Test IM platform connection with given credentials."""
-        try:
-            from gateway.config import Platform, PlatformConfig
-        except ImportError:
-            raise HTTPException(status_code=500, detail="hermes gateway not available")
-
-        try:
-            platform = Platform(req.platform)
-        except ValueError:
-            raise HTTPException(status_code=400, detail=f"Unknown platform: {req.platform}")
-
-        pcfg = PlatformConfig(
-            enabled=True,
-            token=req.token,
-            extra=req.extra,
-        )
-
-        # Create adapter using same logic as IMBridge
-        from .im_bridge import IMBridge
-        temp_bridge = IMBridge(eternity.config, eternity)
-        adapter = temp_bridge._create_adapter(platform, pcfg)
-        if not adapter:
-            raise HTTPException(status_code=400, detail=f"Unsupported platform: {req.platform}")
-
-        try:
-            connected = await adapter.connect()
-            if connected:
-                await adapter.disconnect()
-                return {"status": "success", "message": f"Connected to {req.platform}"}
-            else:
-                # Read error info stored by adapter
-                err_msg = getattr(adapter, '_fatal_error_message', '') or 'Connection failed'
-                return {"status": "failed", "message": err_msg}
-        except Exception as e:
-            logger.warning("IM test connection error: %s", e)
-            return {"status": "error", "message": str(e)}
+        result = await im_bridge.test_connection(req.platform, req.token, req.extra)
+        if result["status"] == "error":
+            status_code = 400 if "Unknown platform" in result["message"] or "Unsupported" in result["message"] else 500
+            raise HTTPException(status_code=status_code, detail=result["message"])
+        elif result["status"] == "failed":
+            return result
+        return result
 
     return app

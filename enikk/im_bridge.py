@@ -420,3 +420,46 @@ class IMBridge:
         """Get the name of the active IM platform."""
         active = self.config.im.active_platform
         return active[0] if active else None
+
+    async def test_connection(self, platform: str, token: str, extra: dict | None = None) -> dict:
+        """Test connection to an IM platform with given credentials.
+
+        Args:
+            platform: Platform name (e.g., 'dingtalk', 'qqbot')
+            token: Authentication token
+            extra: Optional extra configuration dict
+
+        Returns:
+            dict with 'status' ('success' or 'failed') and 'message'
+        """
+        try:
+            from gateway.config import Platform, PlatformConfig
+        except ImportError:
+            return {"status": "error", "message": "hermes gateway not available"}
+
+        try:
+            platform_enum = Platform(platform)
+        except ValueError:
+            return {"status": "error", "message": f"Unknown platform: {platform}"}
+
+        pcfg = PlatformConfig(
+            enabled=True,
+            token=token,
+            extra=extra or {},
+        )
+
+        adapter = self._create_adapter(platform_enum, pcfg)
+        if not adapter:
+            return {"status": "error", "message": f"Unsupported platform: {platform}"}
+
+        try:
+            connected = await adapter.connect()
+            if connected:
+                await adapter.disconnect()
+                return {"status": "success", "message": f"Connected to {platform}"}
+            else:
+                err_msg = getattr(adapter, '_fatal_error_message', '') or 'Connection failed'
+                return {"status": "failed", "message": err_msg}
+        except Exception as e:
+            logger.warning("IM test connection error: %s", e)
+            return {"status": "error", "message": str(e)}
