@@ -145,7 +145,8 @@ class IMBridge:
             else:
                 logger.error("IM bridge reconnect exhausted after %d attempts", max_retries)
 
-    def _create_adapter(self, platform, pcfg):
+    @staticmethod
+    def _create_adapter(platform, pcfg):
         """Instantiate the appropriate hermes platform adapter."""
         from gateway.config import Platform
 
@@ -449,7 +450,7 @@ class IMBridge:
             extra=extra or {},
         )
 
-        adapter = IMBridge._create_adapter(None, platform_enum, pcfg)
+        adapter = IMBridge._create_adapter(platform_enum, pcfg)
         if not adapter:
             return {"status": "error", "message": f"Unsupported platform: {platform}"}
 

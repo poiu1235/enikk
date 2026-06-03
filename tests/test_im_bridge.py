@@ -634,7 +634,7 @@ class TestStart:
         mock_adapter.connect = AsyncMock(return_value=True)
         mock_adapter.set_message_handler = Mock()
 
-        with patch.object(bridge, "_create_adapter", return_value=mock_adapter):
+        with patch.object(IMBridge, "_create_adapter", return_value=mock_adapter):
             await bridge.start()
 
         assert bridge._adapter is mock_adapter
@@ -853,17 +853,16 @@ class TestPublicStatusAPI:
 # ── Tests: test_connection() ─────────────────────────────────────────────
 
 class TestTestConnection:
-    """Test test_connection() method."""
+    """Test test_connection() static method."""
 
     @pytest.mark.asyncio
     async def test_successful_connection(self):
-        bridge = IMBridge(_make_config(), _make_eternity())
         mock_adapter = AsyncMock()
         mock_adapter.connect = AsyncMock(return_value=True)
         mock_adapter.disconnect = AsyncMock()
 
-        with patch.object(bridge, '_create_adapter', return_value=mock_adapter):
-            result = await bridge.test_connection('dingtalk', 'test-token')
+        with patch.object(IMBridge, '_create_adapter', return_value=mock_adapter):
+            result = await IMBridge.test_connection('dingtalk', 'test-token')
 
         assert result['status'] == 'success'
         assert 'Connected to dingtalk' in result['message']
@@ -872,13 +871,12 @@ class TestTestConnection:
 
     @pytest.mark.asyncio
     async def test_failed_connection(self):
-        bridge = IMBridge(_make_config(), _make_eternity())
         mock_adapter = AsyncMock()
         mock_adapter.connect = AsyncMock(return_value=False)
         mock_adapter._fatal_error_message = 'Auth failed'
 
-        with patch.object(bridge, '_create_adapter', return_value=mock_adapter):
-            result = await bridge.test_connection('dingtalk', 'bad-token')
+        with patch.object(IMBridge, '_create_adapter', return_value=mock_adapter):
+            result = await IMBridge.test_connection('dingtalk', 'bad-token')
 
         assert result['status'] == 'failed'
         assert 'Auth failed' in result['message']
@@ -886,43 +884,35 @@ class TestTestConnection:
 
     @pytest.mark.asyncio
     async def test_connection_exception(self):
-        bridge = IMBridge(_make_config(), _make_eternity())
         mock_adapter = AsyncMock()
         mock_adapter.connect = AsyncMock(side_effect=Exception('Network error'))
 
-        with patch.object(bridge, '_create_adapter', return_value=mock_adapter):
-            result = await bridge.test_connection('dingtalk', 'test-token')
+        with patch.object(IMBridge, '_create_adapter', return_value=mock_adapter):
+            result = await IMBridge.test_connection('dingtalk', 'test-token')
 
         assert result['status'] == 'error'
         assert 'Network error' in result['message']
 
     @pytest.mark.asyncio
     async def test_unknown_platform(self):
-        bridge = IMBridge(_make_config(), _make_eternity())
-
-        with patch('enikk.im_bridge.IMBridge._create_adapter'):
-            result = await bridge.test_connection('unknown_platform', 'token')
+        result = await IMBridge.test_connection('unknown_platform', 'token')
 
         assert result['status'] == 'error'
         assert 'Unknown platform' in result['message']
 
     @pytest.mark.asyncio
     async def test_unsupported_platform(self):
-        bridge = IMBridge(_make_config(), _make_eternity())
-
-        with patch.object(bridge, '_create_adapter', return_value=None):
-            result = await bridge.test_connection('dingtalk', 'test-token')
+        with patch.object(IMBridge, '_create_adapter', return_value=None):
+            result = await IMBridge.test_connection('dingtalk', 'test-token')
 
         assert result['status'] == 'error'
         assert 'Unsupported platform' in result['message']
 
     @pytest.mark.asyncio
     async def test_gateway_not_available(self):
-        bridge = IMBridge(_make_config(), _make_eternity())
-
         with patch.dict('sys.modules', {'gateway.config': None}):
             with patch('builtins.__import__', side_effect=ImportError):
-                result = await bridge.test_connection('dingtalk', 'token')
+                result = await IMBridge.test_connection('dingtalk', 'token')
 
         assert result['status'] == 'error'
         assert 'not available' in result['message']
