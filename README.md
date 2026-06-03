@@ -85,7 +85,6 @@ Enikk can control **any Windows desktop application**:
 git clone https://github.com/gtt116/enikk.git
 cd enikk
 uv venv --seed
-.venv\Scripts\Activate.ps1
 uv pip install -e .
 enikk
 ```
