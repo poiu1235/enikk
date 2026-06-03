@@ -1096,14 +1096,7 @@ function chatApp() {
     _streamMsgVer: 0,  // version counter to force x-for re-evaluation on SSE events
     _showJumpBottom: false,
     currentLang: 'zh-CN',
-    currentTipIndex: 0,
-    get currentTipText() {
-      // Force reactivity on currentLang and currentTipIndex
-      void this.currentLang;
-      void this.currentTipIndex;
-      const tips = [t('chat.stop_hint'), t('chat.teach_hint')];
-      return tips[this.currentTipIndex];
-    },
+    currentTipText: '',
     // Register currentLang as a reactive dependency so Alpine re-evaluates all t() bindings when language changes
     t(key, ...args) { void this.currentLang; return t(key, ...args); },
 
@@ -1116,9 +1109,16 @@ function chatApp() {
       this.fetchSessions();
       this.fetchSystemStatus();
       this._systemStatusTimer = setInterval(() => this.fetchSystemStatus(), 5000);
-      // Rotate tips every 8 seconds
+      // Initialize and rotate tips every 8 seconds
+      let tipIndex = 0;
+      const tips = () => [t('chat.stop_hint'), t('chat.teach_hint')];
+      this.currentTipText = tips()[0];
+      if (this._tipTimer) {
+        clearInterval(this._tipTimer);
+      }
       this._tipTimer = setInterval(() => {
-        this.currentTipIndex = (this.currentTipIndex + 1) % 2;
+        tipIndex = (tipIndex + 1) % 2;
+        this.currentTipText = tips()[tipIndex];
       }, 8000);
       this.$nextTick(() => { this.initMarked(); });
       window.addEventListener('popstate', (e) => {
