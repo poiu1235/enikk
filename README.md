@@ -48,34 +48,6 @@ Every screenshot, bounding box, OCR result, reasoning step, and tool call is vis
 
 ## 🏗 Architecture
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    Enikk Desktop App                     │
-│                                                          │
-│  ┌──────────┐    ┌──────────────┐    ┌───────────────┐  │
-│  │ Screenshot │──▶│  UI Parser    │──▶│ AppController  │  │
-│  │  (Screen)  │    │ YOLO + OCR   │    │ (Input/Win)    │  │
-│  └──────────┘    └──────────────┘    └───────┬───────┘  │
-│                                               │         │
-│                          ┌────────────────────┘         │
-│                          ▼                              │
-│  ┌──────────────────────────────────────────────────┐  │
-│  │               Eternity (Session Manager)          │  │
-│  │                                                  │  │
-│  │  ┌─────────────┐  ┌──────────┐  ┌────────────┐  │  │
-│  │  │  AIAgent    │  │ SSE Pub  │  │ IM Bridge  │  │  │
-│  │  │ (Hermes)    │  │  /Sub    │  │   (QQ)     │  │  │
-│  │  └─────────────┘  └──────────┘  └────────────┘  │  │
-│  └──────────────────────────────────────────────────┘  │
-│                          │                              │
-│                          ▼                              │
-│  ┌──────────────────────────────────────────────────┐  │
-│  │        Built-in Web Dashboard (WebView)           │  │
-│  │         SSE Streaming · Config Editor             │  │
-│  └──────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────┘
-```
-
 **Data flow:**
 1. **Capture** — Take a screenshot of the target application window
 2. **Parse** — YOLO detects UI elements, OCR reads text, results normalized to `[0,1000]` coordinates
@@ -175,7 +147,7 @@ Enikk stands on the shoulders of giants:
 
 | Project | License | Role |
 |---|---|---|
-| [Hermes Agent](https://github.com/NousResearch/hermes-agent) (NousResearch) | MIT | AI Agent framework, tool system, memory, gateway |
+| [Hermes Agent](https://github.com/NousResearch/hermes-agent) (NousResearch) | MIT | AI Agent framework, tool system, memory, IM Platform |
 | [OmniParser](https://github.com/microsoft/OmniParser) (Microsoft) | CC-BY-4.0 | YOLO model weights for UI element detection |
 | [RapidOCR](https://github.com/RapidAI/RapidOCR) | Apache 2.0 | ONNX-based Chinese OCR engine |
 
