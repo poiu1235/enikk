@@ -45,6 +45,46 @@ def extract_image_path(result) -> str | None:
     return None
 
 
+def log_tool(func):
+    """Decorator to log tool method entry/exit with timing.
+
+    Logs method name and arguments on entry, and completion with elapsed time on exit.
+    Skips 'self' parameter from logging.
+    """
+    import functools
+    import inspect
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        # Get function signature to map positional args to names
+        sig = inspect.signature(func)
+        bound = sig.bind(*args, **kwargs)
+        bound.apply_defaults()
+
+        # Exclude 'self' from logged arguments
+        log_args = {k: v for k, v in bound.arguments.items() if k != "self"}
+
+        # Log entry
+        args_str = ", ".join(f"{k}={v!r}" for k, v in log_args.items())
+        logger.info("%s(%s) start", func.__name__, args_str)
+
+        # Execute and time
+        start = time.time()
+        try:
+            result = func(*args, **kwargs)
+            elapsed = time.time() - start
+
+            # Log completion
+            logger.info("%s done in %.2fs", func.__name__, elapsed)
+            return result
+        except Exception as e:
+            elapsed = time.time() - start
+            logger.error("%s failed after %.2fs: %s", func.__name__, elapsed, e)
+            raise
+
+    return wrapper
+
+
 class AppController:
     """Bundled app services for multiple app instances.
 
@@ -105,15 +145,14 @@ class AppController:
 
     # ── Agent tool primitives ──────────────────────────────────────────
 
+    @log_tool
     def list_apps(self) -> dict:
         """Return the list of configured app names available for use."""
         return {"apps": sorted(self.config.apps.keys())}
 
+    @log_tool
     def analyze(self, app: str, target: str = "app") -> dict:
         """Capture window, run OCR + YOLO, return structured state."""
-        t0 = time.time()
-        logger.info("analyze(app=%s, target=%s) start", app, target)
-
         hwnd = self._find_window(app, target)
         if hwnd is None:
             logger.info("analyze: %s window not found", target)
@@ -144,9 +183,6 @@ class AppController:
         bbox_path = str(date_dir / f"{app}_{ts}_bbox.jpeg")
         self._save_bbox_overlay(compressed, parsed, bbox_path, hwnd=hwnd)
 
-        elapsed = time.time() - t0
-        logger.info("analyze: done in %.2fs", elapsed)
-
         # Get mouse position relative to window client area
         mouse_pos = self._get_mouse_position(hwnd)
 
@@ -166,9 +202,9 @@ class AppController:
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
         }
 
+    @log_tool
     def read_image(self, path: str) -> dict:
         """Read an image file and return base64 content for vision model analysis."""
-        logger.info("read_image(path=%s)", path)
         p = Path(path)
         if not p.exists():
             logger.info("read_image: file not found")
@@ -178,7 +214,7 @@ class AppController:
         image_b64 = base64.b64encode(image_bytes).decode()
         suffix = p.suffix.lower().lstrip(".")
         mime = "jpeg" if suffix in ("jpg", "jpeg") else suffix
-        logger.info("read_image: done, mime=%s, size=%d bytes", mime, len(image_bytes))
+        logger.info("read_image: mime=%s, size=%d bytes", mime, len(image_bytes))
 
         return {
             "_multimodal": True,
@@ -189,11 +225,9 @@ class AppController:
             ],
         }
 
-    def click(self, x: int, y: int, app: str, target: str = "app", clicks: int = 1) -> dict:
+    @log_tool
+    def click(self, x: int, y: int, app: str, target: str = "app", clicks: int = 1, reason: str = "") -> dict:
         """Click at normalized [0, 1000] coordinates. clicks=2 for double-click."""
-        t0 = time.time()
-        logger.info("click(x=%d, y=%d, app=%s, target=%s, clicks=%d)", x, y, app, target, clicks)
-
         hwnd = self._find_window(app, target)
         if hwnd is None:
             logger.info("click: %s window not found", target)
@@ -201,15 +235,11 @@ class AppController:
 
         with self._input_lock:
             result = self.input.click_normalized(hwnd, x, y, clicks=clicks)
-        elapsed = time.time() - t0
-        logger.info("click: done in %.2fs, success=%s", elapsed, result.get("success"))
         return result
 
+    @log_tool
     def press_key(self, key: str, app: str, target: str = "app", wait_time: float = 0.2) -> dict:
         """Press a key on the app or launcher window."""
-        t0 = time.time()
-        logger.info("press_key(key=%s, app=%s, target=%s)", key, app, target)
-
         hwnd = self._find_window(app, target)
         if hwnd is None:
             logger.info("press_key: %s window not found", target)
@@ -218,15 +248,46 @@ class AppController:
         with self._input_lock:
             self._force_foreground(hwnd)
             self.input.press_key(key, wait_time)
-        elapsed = time.time() - t0
-        logger.info("press_key: done in %.2fs", elapsed)
         return {"success": True, "key": key}
 
+    @log_tool
+    def hotkey(self, keys: list[str], app: str, target: str = "app") -> dict:
+        """Press a combination of keys simultaneously (e.g. ['alt', 'left'])."""
+        hwnd = self._find_window(app, target)
+        if hwnd is None:
+            logger.info("hotkey: %s window not found", target)
+            return {"success": False, "error": f"{target} window not found for '{app}'"}
+
+        with self._input_lock:
+            self._force_foreground(hwnd)
+            self.input.hotkey(*keys)
+        return {"success": True, "keys": keys}
+
+    @log_tool
+    def scroll(self, x: int, y: int, clicks: int, app: str, target: str = "app",
+               direction: str = "vertical", reason: str = "") -> dict:
+        """Scroll at normalized [0,1000] coordinates."""
+        hwnd = self._find_window(app, target)
+        if hwnd is None:
+            logger.info("scroll: %s window not found", target)
+            return {"success": False, "error": f"{target} window not found for '{app}'"}
+
+        region = self.window.get_client_region(hwnd)
+        if region is None:
+            logger.info("scroll: window client region not available")
+            return {"success": False, "error": "Window client region not available"}
+
+        abs_x = region.left + int(x / 1000 * region.width)
+        abs_y = region.top + int(y / 1000 * region.height)
+
+        with self._input_lock:
+            self._force_foreground(hwnd)
+            result = self.input.scroll(abs_x, abs_y, clicks, direction)
+        return result
+
+    @log_tool
     def type_text(self, text: str, app: str, target: str = "app") -> dict:
         """Type text into the app or launcher window via clipboard paste (Ctrl+V). Supports Unicode/CJK."""
-        t0 = time.time()
-        logger.info("type_text(app=%s, target=%s, len=%d)", app, target, len(text))
-
         hwnd = self._find_window(app, target)
         if hwnd is None:
             logger.info("type_text: %s window not found", target)
@@ -236,15 +297,11 @@ class AppController:
             self._force_foreground(hwnd)
             time.sleep(0.1)
             result = self.input.type_text(text)
-        elapsed = time.time() - t0
-        logger.info("type_text: done in %.2fs, success=%s", elapsed, result.get("success"))
         return result
 
+    @log_tool
     def swipe_screen(self, x1: int, y1: int, x2: int, y2: int, app: str, target: str = "app", speed: float = 1.0) -> dict:
         """Swipe from (x1,y1) to (x2,y2) in normalized [0,1000] coordinates."""
-        t0 = time.time()
-        logger.info("swipe_screen(%d,%d -> %d,%d, speed=%.1f, app=%s, target=%s)", x1, y1, x2, y2, speed, app, target)
-
         hwnd = self._find_window(app, target)
         if hwnd is None:
             logger.info("swipe_screen: %s window not found", target)
@@ -261,15 +318,11 @@ class AppController:
             abs_x2 = region.left + int(x2 / 1000 * region.width)
             abs_y2 = region.top + int(y2 / 1000 * region.height)
             self.input.swipe_screen((abs_x1, abs_y1), (abs_x2, abs_y2), speed=speed)
-        elapsed = time.time() - t0
-        logger.info("swipe_screen: done in %.2fs", elapsed)
         return {"success": True, "from": [x1, y1], "to": [x2, y2]}
 
+    @log_tool
     def move_mouse(self, x: int, y: int, app: str, target: str = "app") -> dict:
         """Move mouse cursor to normalized [0,1000] coordinates."""
-        t0 = time.time()
-        logger.info("move_mouse(x=%d, y=%d, app=%s, target=%s)", x, y, app, target)
-
         hwnd = self._find_window(app, target)
         if hwnd is None:
             logger.info("move_mouse: %s window not found", target)
@@ -284,18 +337,15 @@ class AppController:
             abs_x = region.left + int(x / 1000 * region.width)
             abs_y = region.top + int(y / 1000 * region.height)
             self.input.mouse_move_screen(abs_x, abs_y)
-        elapsed = time.time() - t0
-        logger.info("move_mouse: done in %.2fs", elapsed)
         return {"success": True, "x": x, "y": y}
 
+    @log_tool
     def launch(self, app: str | None = None, exe: str | None = None) -> dict:
         """Start the launcher and wait for its window.
 
         If exe is provided without app, auto-register the app and derive the key from the exe filename.
         If both app and exe are provided, use the specified app key.
         """
-        t0 = time.time()
-
         # Auto-register if exe provided without app
         if exe and not app:
             app = Path(exe).stem  # e.g., "cloudmusic" from "cloudmusic.exe"
@@ -304,8 +354,6 @@ class AppController:
 
         if not app:
             return {"error": "Either 'app' or 'exe' must be provided"}
-
-        logger.info("launch(app=%s, exe=%s) start", app, exe)
 
         if self.is_app_running(app):
             logger.info("launch: %s already running", app)
@@ -331,18 +379,15 @@ class AppController:
             return {"error": f"Launcher process started but window not detected within 30s for '{app}'. The launcher may be running but its window is not visible or accessible."}
 
         self._force_foreground(hwnd)
-        elapsed = time.time() - t0
-        logger.info("launch: launcher ready in %.2fs", elapsed)
         return {
             "status": "launcher_ready",
             "message": "Launcher is ready. Use analyze() to find Start Game button, click it, then wait and analyze(target='app') to check if app loaded.",
         }
 
-    def wait(self, seconds: float) -> dict:
+    @log_tool
+    def wait(self, seconds: float, reason: str = "") -> dict:
         """Wait for a specified duration."""
-        logger.info("wait(%.1fs)", seconds)
         time.sleep(seconds)
-        logger.info("wait: done")
         return {"status": "waited", "seconds": seconds}
 
     @staticmethod
@@ -356,6 +401,7 @@ class AppController:
         matches = sum(1 for x, y in zip(a_lower, b_lower) if x == y)
         return matches / max(len(a_lower), len(b_lower))
 
+    @log_tool
     def wait_for(self, text: str, app: str, target: str = "app",
                  timeout: float = 90, interval: float = 5,
                  threshold: float = 0.7) -> dict:
@@ -374,8 +420,6 @@ class AppController:
             or {"found": False, "error": "timeout after Ns", "elapsed": N} on timeout.
         """
         t0 = time.time()
-        logger.info("wait_for(text=%r, app=%s, target=%s, timeout=%.0f, interval=%.1f)",
-                    text, app, target, timeout, interval)
 
         while True:
             result = self.analyze(app=app, target=target)
@@ -395,8 +439,6 @@ class AppController:
 
                 if best_match and best_score >= threshold:
                     elapsed = time.time() - t0
-                    logger.info("wait_for: found %r (similarity=%.2f) in %.1fs",
-                                best_match.get("text"), best_score, elapsed)
                     return {
                         "found": True,
                         "text": best_match.get("text"),
@@ -407,73 +449,13 @@ class AppController:
 
             elapsed = time.time() - t0
             if elapsed >= timeout:
-                logger.info("wait_for: timeout after %.1fs", elapsed)
                 return {"found": False, "error": f"timeout after {elapsed:.0f}s", "elapsed": round(elapsed, 1)}
 
             time.sleep(interval)
 
-    def find_and_click(self, text: str, app: str, target: str = "app",
-                       threshold: float = 0.7) -> dict:
-        """Find text on screen via analyze() and click its center.
-
-        Args:
-            text: Text to search for (substring + fuzzy match).
-            app: Which app to operate on.
-            target: 'app' or 'launcher'.
-            threshold: Minimum similarity ratio (0.0-1.0) for fuzzy match.
-
-        Returns:
-            {"success": True, "text": ..., "clicked": (cx, cy)} on success,
-            or {"success": False, "error": "not found"} on failure.
-        """
-        logger.info("find_and_click(text=%r, app=%s, target=%s)", text, app, target)
-
-        result = self.analyze(app=app, target=target)
-
-        if "error" in result:
-            return {"success": False, "error": result["error"]}
-
-        elements = result.get("ui_elements", [])
-        best_match = None
-        best_score = 0.0
-
-        for item in elements:
-            detected = item.get("text", "")
-            if not detected:
-                continue
-            score = self._text_similarity(text, detected)
-            if score > best_score:
-                best_score = score
-                best_match = item
-
-        if not best_match or best_score < threshold:
-            logger.info("find_and_click: text %r not found (best_score=%.2f)", text, best_score)
-            return {"success": False, "error": f"text not found: {text}"}
-
-        center = best_match.get("center")
-        if not center or len(center) != 2:
-            logger.info("find_and_click: matched element has no center")
-            return {"success": False, "error": "matched element has no clickable center"}
-
-        cx, cy = center
-        logger.info("find_and_click: clicking %r at (%d, %d), similarity=%.2f",
-                    best_match.get("text"), cx, cy, best_score)
-
-        click_result = self.click(x=cx, y=cy, app=app, target=target)
-
-        if click_result.get("success"):
-            return {
-                "success": True,
-                "text": best_match.get("text"),
-                "similarity": round(best_score, 3),
-                "clicked": (cx, cy),
-            }
-        else:
-            return {"success": False, "error": click_result.get("error", "click failed")}
-
+    @log_tool
     def stop(self, app: str) -> dict:
         """Stop both app and launcher processes."""
-        logger.info("stop(app=%s)", app)
         pm = self._get_process(app)
         result = {
             "app_stopped": pm.stop_app(),
@@ -482,18 +464,18 @@ class AppController:
         logger.info("stop: %s", result)
         return result
 
+    @log_tool
     def search_files(self, query: str, path: str | None = None, limit: int = 20) -> dict:
         """Search files by name on the system.
 
         Uses Windows Search API first, falls back to PowerShell if unavailable.
         Supports wildcard patterns (* and ?).
         """
-        logger.info("search_files(query=%r, path=%s, limit=%d)", query, path, limit)
         return search_files(query=query, path=path, limit=limit)
 
+    @log_tool
     def register_app_tool(self, name: str, exe_path: str) -> dict:
         """Register a custom app for future use."""
-        logger.info("register_app(name=%s, exe_path=%s)", name, exe_path)
         ac = self.config.register_app(name, exe_path)
         return {
             "success": True,
@@ -653,12 +635,16 @@ class AppController:
                             "type": "integer",
                             "description": "Number of clicks. Default 1, set to 2 for double-click.",
                         },
+                        "reason": {
+                            "type": "string",
+                            "description": "Optional reason for this click (for logging/debugging).",
+                        },
                     },
                     "required": ["x", "y", "app", "target"],
                 },
             },
             handler=lambda args, **kw: tool_result(
-                self.click(x=args["x"], y=args["y"], app=args["app"], target=args.get("target", "app"), clicks=args.get("clicks", 1))
+                self.click(x=args["x"], y=args["y"], app=args["app"], target=args.get("target", "app"), clicks=args.get("clicks", 1), reason=args.get("reason", ""))
             ),
         )
 
@@ -727,6 +713,37 @@ class AppController:
             },
             handler=lambda args, **kw: tool_result(
                 self.press_key(key=args["key"], app=args["app"], target=args.get("target", "app"), wait_time=args.get("wait_time", 0.2))
+            ),
+        )
+
+        registry.register(
+            name="hotkey",
+            toolset=AppController.TOOLSET,
+            schema={
+                "description": "Press a combination of keys simultaneously on the app or launcher window (e.g. Alt+Left, Ctrl+C). Brings the target window to foreground before sending the key combination.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "keys": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "List of key names to press together (e.g. ['alt', 'left'], ['ctrl', 'c']).",
+                        },
+                        "app": {
+                            "type": "string",
+                            "description": "Which app to operate on, e.g. 'nikke' or 'wutheringwave'.",
+                        },
+                        "target": {
+                            "type": "string",
+                            "enum": ["app", "launcher"],
+                            "description": "Which window to send the keys to: 'app' (default) or 'launcher'.",
+                        },
+                    },
+                    "required": ["keys", "app"],
+                },
+            },
+            handler=lambda args, **kw: tool_result(
+                self.hotkey(keys=args["keys"], app=args["app"], target=args.get("target", "app"))
             ),
         )
 
@@ -807,6 +824,61 @@ class AppController:
         )
 
         registry.register(
+            name="scroll",
+            toolset=AppController.TOOLSET,
+            schema={
+                "description": "Scroll the mouse wheel at a specified position on the app or launcher window. Coordinates are normalized [0, 1000] where (0,0) is top-left and (1000,1000) is bottom-right. Positive clicks scroll up or right, negative clicks scroll down or left. Supports both vertical and horizontal scrolling.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "x": {
+                            "type": "integer",
+                            "description": "X coordinate in normalized [0, 1000] range.",
+                        },
+                        "y": {
+                            "type": "integer",
+                            "description": "Y coordinate in normalized [0, 1000] range.",
+                        },
+                        "clicks": {
+                            "type": "integer",
+                            "description": "Scroll amount. Positive values scroll up or right, negative values scroll down or left. Typically 3-5 for small scroll, 10+ for large scroll.",
+                        },
+                        "app": {
+                            "type": "string",
+                            "description": "Which app to operate on, e.g. 'nikke' or 'wutheringwave'.",
+                        },
+                        "target": {
+                            "type": "string",
+                            "enum": ["app", "launcher"],
+                            "description": "Which window to scroll in: 'app' (default) or 'launcher'.",
+                        },
+                        "direction": {
+                            "type": "string",
+                            "enum": ["vertical", "horizontal"],
+                            "description": "Scroll direction: 'vertical' (default) or 'horizontal'.",
+                        },
+                        "reason": {
+                            "type": "string",
+                            "description": "Optional reason for this scroll (for logging/debugging).",
+                        },
+                    },
+                    "required": ["x", "y", "clicks", "app"],
+                },
+            },
+            handler=lambda args, **kw: tool_result(
+                self.scroll(
+                    x=args["x"],
+                    y=args["y"],
+                    clicks=args["clicks"],
+                    app=args["app"],
+                    target=args.get("target", "app"),
+                    direction=args.get("direction", "vertical"),
+                    reason=args.get("reason", ""),
+                )
+            ),
+        )
+
+        registry.register(
             name="launch",
             toolset=AppController.TOOLSET,
             schema={
@@ -841,12 +913,16 @@ class AppController:
                             "type": "number",
                             "description": "Number of seconds to wait.",
                         },
+                        "reason": {
+                            "type": "string",
+                            "description": "Optional reason for this wait (for logging/debugging).",
+                        },
                     },
                     "required": ["seconds"],
                 },
             },
             handler=lambda args, **kw: tool_result(
-                self.wait(seconds=args["seconds"])
+                self.wait(seconds=args["seconds"], reason=args.get("reason", ""))
             ),
         )
 
@@ -860,7 +936,7 @@ class AppController:
                     "properties": {
                         "text": {
                             "type": "string",
-                            "description": "Text to search for on screen. Supports substring and fuzzy matching (e.g. '点击任意处').",
+                            "description": "Text to search for on screen. Supports substring and fuzzy matching",
                         },
                         "app": {
                             "type": "string",
@@ -890,40 +966,6 @@ class AppController:
                     target=args.get("target", "app"),
                     timeout=args.get("timeout", 90),
                     interval=args.get("interval", 5),
-                )
-            ),
-        )
-
-        registry.register(
-            name="find_and_click",
-            toolset=AppController.TOOLSET,
-            schema={
-                "description": "Find text on screen and click it. Combines analyze() + click() in one call. Supports fuzzy matching for OCR typos. Useful for buttons like '全部领取', '确认', '关闭'.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "text": {
-                            "type": "string",
-                            "description": "Text to find and click (e.g. '全部领取', '确认'). Supports substring and fuzzy matching.",
-                        },
-                        "app": {
-                            "type": "string",
-                            "description": "Which app to operate on, e.g. 'nikke' or 'wutheringwave'.",
-                        },
-                        "target": {
-                            "type": "string",
-                            "enum": ["app", "launcher"],
-                            "description": "Which window to search: 'app' (default) or 'launcher'.",
-                        },
-                    },
-                    "required": ["text", "app"],
-                },
-            },
-            handler=lambda args, **kw: tool_result(
-                self.find_and_click(
-                    text=args["text"],
-                    app=args["app"],
-                    target=args.get("target", "app"),
                 )
             ),
         )

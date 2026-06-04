@@ -51,6 +51,46 @@ class ModelConfig:
     base_url: str = ""
     api_key: str = ""
     max_tokens: int = 65535
+    context_length: int = 262144  # Model context window size, default 256K
+
+    @property
+    def effective_provider(self) -> str:
+        """Return provider name suitable for hermes-agent.
+
+        When base_url and api_key are configured, prefix with "custom:" so
+        hermes-agent's auxiliary client uses our credentials instead of
+        trying to find them from environment variables.
+        """
+        if not self.provider:
+            return ""
+        # Already prefixed with "custom:" — no change needed
+        if self.provider.startswith("custom:") or self.provider == "custom":
+            return self.provider
+        # Check if it's a built-in provider (including our custom additions)
+        custom_builtin_providers = {
+            "alibaba-cn": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        }
+        try:
+            from hermes_cli.auth import PROVIDER_REGISTRY
+            # Check hermes built-in providers
+            builtin_provider = PROVIDER_REGISTRY.get(self.provider)
+            if builtin_provider:
+                # Built-in provider: if no custom base_url or base_url matches, use as-is
+                if not self.base_url or self.base_url == builtin_provider.inference_base_url:
+                    return self.provider
+            # Check our custom built-in providers
+            elif self.provider in custom_builtin_providers:
+                if not self.base_url or self.base_url == custom_builtin_providers[self.provider]:
+                    return self.provider
+        except ImportError:
+            # If hermes not available, still check our custom providers
+            if self.provider in custom_builtin_providers:
+                if not self.base_url or self.base_url == custom_builtin_providers[self.provider]:
+                    return self.provider
+        # For custom endpoints: add custom: prefix so hermes uses our credentials
+        if self.base_url and self.api_key:
+            return f"custom:{self.provider}"
+        return self.provider
 
 
 @dataclass

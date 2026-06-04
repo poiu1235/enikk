@@ -9,6 +9,7 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from hermes_cli.auth import PROVIDER_REGISTRY
 from pydantic import BaseModel
 
 from .config import enikk_home
@@ -241,6 +242,53 @@ def create_app(eternity: Eternity, im_bridge=None) -> FastAPI:
         """Get current configuration."""
         return eternity.config.to_dict()
 
+    @app.get("/api/providers")
+    def list_providers():
+        """List available providers from hermes-agent."""
+        providers = []
+        # Built-in providers with api_key auth only
+        for name, cfg in sorted(PROVIDER_REGISTRY.items()):
+            if cfg.auth_type != "api_key":
+                continue
+            # Note: hermes builtin 'alibaba' uses international dashscope (dashscope-intl.aliyuncs.com)
+            providers.append({
+                "name": name,
+                "display_name": name.replace("-", " ").title(),
+                "base_url": cfg.inference_base_url or "",
+                "auth_type": cfg.auth_type,
+                "builtin": True,
+            })
+
+        # Add alibaba-cn (China region) after alibaba
+        alibaba_cn = {
+            "name": "alibaba-cn",
+            "display_name": "Alibaba Cn",
+            "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            "auth_type": "api_key",
+            "builtin": True,
+        }
+        # Find position after alibaba
+        insert_pos = None
+        for i, p in enumerate(providers):
+            if p["name"] == "alibaba":
+                insert_pos = i + 1
+                break
+        if insert_pos is not None:
+            providers.insert(insert_pos, alibaba_cn)
+        else:
+            providers.append(alibaba_cn)
+
+        # Add Custom option at the end
+        providers.append({
+            "name": "custom",
+            "display_name": "Custom",
+            "base_url": "",
+            "auth_type": "api_key",
+            "builtin": False,
+        })
+
+        return {"providers": providers}
+
     @app.put("/api/config")
     def update_config(data: dict):
         """Update configuration."""
@@ -339,29 +387,58 @@ def create_app(eternity: Eternity, im_bridge=None) -> FastAPI:
     @app.post("/api/model/test")
     async def test_model_connection(req: dict):
         """Test LLM API connection with given credentials."""
-        try:
-            from openai import AsyncOpenAI
-        except ImportError:
-            raise HTTPException(status_code=500, detail="openai not installed")
-
         api_key = req.get("api_key", "")
         model_name = req.get("default", "")
+        base_url = req.get("base_url", "")
+        provider = req.get("provider", "")
+
         if not api_key:
             return {"status": "failed", "message": "API Key is required"}
         if not model_name:
             return {"status": "failed", "message": "Model name is required"}
 
-        client = AsyncOpenAI(
-            api_key=api_key,
-            base_url=req.get("base_url") or None,
-        )
-
         try:
-            await client.chat.completions.create(
-                model=model_name,
-                messages=[{"role": "user", "content": "Hi"}],
-                max_tokens=1,
-            )
+            # Detect API mode based on provider and base_url
+            api_mode = "chat_completions"  # default
+
+            # Check if it's Anthropic Messages API
+            if provider == "anthropic" or base_url.rstrip("/").endswith("/anthropic"):
+                api_mode = "anthropic_messages"
+
+            if api_mode == "anthropic_messages":
+                try:
+                    from anthropic import AsyncAnthropic
+                except ImportError:
+                    return {"status": "failed", "message": "anthropic package not installed"}
+
+                anthropic_client = AsyncAnthropic(
+                    api_key=api_key,
+                    base_url=base_url if base_url else None,
+                )
+
+                await anthropic_client.messages.create(
+                    model=model_name,
+                    max_tokens=1,
+                    messages=[{"role": "user", "content": "Hi"}],
+                )
+            else:
+                # OpenAI Chat Completions API (most providers)
+                try:
+                    from openai import AsyncOpenAI
+                except ImportError:
+                    return {"status": "failed", "message": "openai package not installed"}
+
+                openai_client = AsyncOpenAI(
+                    api_key=api_key,
+                    base_url=base_url if base_url else None,
+                )
+
+                await openai_client.chat.completions.create(
+                    model=model_name,
+                    messages=[{"role": "user", "content": "Hi"}],
+                    max_tokens=1,
+                )
+
             return {"status": "success", "message": f"Connected to {model_name}"}
         except Exception as e:
             return {"status": "failed", "message": str(e)}
