@@ -1,6 +1,7 @@
 """Enikk daemon entry point."""
 import argparse
 import asyncio
+import copy
 import logging
 import logging.handlers
 import os
@@ -28,6 +29,54 @@ os.environ["HERMES_BUNDLED_SKILLS"] = str(Path(__file__).parent / "skills")
 
 
 logger = logging.getLogger(__name__)
+
+
+class _ColoredFormatter(logging.Formatter):
+    """Formatter that colors the level name by severity using ANSI codes."""
+
+    _COLORS = {
+        logging.DEBUG: "\033[36m",     # cyan
+        logging.INFO: "\033[32m",      # green
+        logging.WARNING: "\033[33m",   # yellow
+        logging.ERROR: "\033[31m",     # red
+        logging.CRITICAL: "\033[35m",  # magenta
+    }
+    _RESET = "\033[0m"
+
+    def format(self, record: logging.LogRecord) -> str:
+        color = self._COLORS.get(record.levelno, "")
+        if color:
+            record = copy.copy(record)
+            record.levelname = f"{color}{record.levelname}{self._RESET}"
+        return super().format(record)
+
+
+def _setup_logging(log_dir: Path) -> None:
+    """Initialize logging with colored console output and plain file output."""
+    # Console handler: colored output
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(_ColoredFormatter(
+        "%(asctime)s %(levelname)s %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    ))
+    root_logger = logging.getLogger()
+    root_logger.handlers.clear()
+    root_logger.addHandler(console_handler)
+    root_logger.setLevel(logging.INFO)
+
+    # File handler: plain output (no color codes)
+    log_dir.mkdir(parents=True, exist_ok=True)
+    file_handler = logging.handlers.RotatingFileHandler(
+        log_dir / "enikk.log",
+        maxBytes=10 * 1024 * 1024,
+        backupCount=5,
+        encoding="utf-8",
+    )
+    file_handler.setFormatter(logging.Formatter(
+        "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    ))
+    root_logger.addHandler(file_handler)
 
 
 async def _run_im_bridge(im_bridge) -> None:
@@ -70,12 +119,7 @@ def main():
 """)
     print(logo, flush=True)
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-        force=True,
-    )
+    _setup_logging(_enikk_home_path / "logs")
     logger.info("Home directory: %s", _enikk_home_path)
 
     # Load config from {home_dir}/config.yaml
@@ -95,21 +139,6 @@ def main():
 
     # Ensure weights are ready (copy from bundle if needed)
     ensure_weights_ready(Path(cfg.workspace.weights_dir))
-
-    # Also write logs to home/logs/enikk.log (rotate 5 files × 10MB)
-    log_dir = _enikk_home_path / "logs"
-    log_dir.mkdir(parents=True, exist_ok=True)
-    file_handler = logging.handlers.RotatingFileHandler(
-        log_dir / "enikk.log",
-        maxBytes=10 * 1024 * 1024,
-        backupCount=5,
-        encoding="utf-8",
-    )
-    file_handler.setFormatter(logging.Formatter(
-        "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    ))
-    logging.getLogger().addHandler(file_handler)
 
     for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
         logging.getLogger(name).handlers.clear()

@@ -10,5 +10,5 @@ if errorlevel 1 (
     exit /b
 )
 
-.venv\Scripts\python.exe -m enikk
+powershell -NoProfile -ExecutionPolicy Bypass -Command "& '.venv\Scripts\python.exe' -m enikk"
 popd
