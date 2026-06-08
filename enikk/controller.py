@@ -156,7 +156,7 @@ class AppController:
                 "launcher_path": ac.launcher_path,
                 "launch_timeout": ac.launch_timeout,
             })
-        apps.sort(key=lambda a: a["name"])
+        apps.sort(key=lambda a: str(a["name"]))
         return {"apps": apps}
 
     @log_tool
