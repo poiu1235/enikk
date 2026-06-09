@@ -1,6 +1,7 @@
 """OmniParser-style UI analysis: YOLO icon detection + OCR text recognition."""
 import logging
 import os
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 
@@ -119,13 +120,24 @@ def _is_inside(box1, box2):
 class UIParser:
     """Pre-loads YOLO + OCR models, parses compressed screenshots."""
 
-    def __init__(self, weights_dir: str | None = None, screenshot_max_dim: int = 1366):
+    def __init__(self, weights_dir: str | None = None, screenshot_max_dim: int = 1366,
+                 use_dml: bool = False):
         self.max_dim = screenshot_max_dim
         self.yolo_session = None
         self.yolo_names = {0: "icon"}  # single-class model
+        self.use_dml = use_dml or "DmlExecutionProvider" in ort.get_available_providers()
+        self._inference_lock = threading.Lock() if self.use_dml else None
+        if self.use_dml:
+            logger.info("DirectML enabled (providers: %s)", ort.get_available_providers())
+        else:
+            logger.info("DirectML not available, using CPU (providers: %s)", ort.get_available_providers())
 
         # Build RapidOCR kwargs
         ocr_kwargs = {}
+        if self.use_dml:
+            ocr_kwargs["det_use_dml"] = True
+            ocr_kwargs["cls_use_dml"] = True
+            ocr_kwargs["rec_use_dml"] = True
         if weights_dir:
             rapidocr_dir = os.path.join(weights_dir, "rapidocr")
             det_path = os.path.join(rapidocr_dir, "ch_PP-OCRv4_det_infer.onnx")
@@ -147,8 +159,9 @@ class UIParser:
                 logger.warning(f"ONNX model not found: {onnx_path}. Run: python scripts/export_yolo_onnx.py weights/icon_detect/model.pt")
             else:
                 try:
-                    logger.info(f"Loading YOLO ONNX: {onnx_path}")
-                    self.yolo_session = ort.InferenceSession(onnx_path, providers=["CPUExecutionProvider"])
+                    providers = ["DmlExecutionProvider", "CPUExecutionProvider"] if self.use_dml else ["CPUExecutionProvider"]
+                    logger.info(f"Loading YOLO ONNX: {onnx_path} (providers={providers})")
+                    self.yolo_session = ort.InferenceSession(onnx_path, providers=providers)
                     logger.info("YOLO ONNX model loaded")
                 except Exception as e:
                     logger.warning(f"Failed to load YOLO ONNX model: {e}", exc_info=True)
@@ -180,7 +193,11 @@ class UIParser:
 
         # Inference
         input_name = self.yolo_session.get_inputs()[0].name
-        output = self.yolo_session.run(None, {input_name: img})[0]
+        if self._inference_lock:
+            with self._inference_lock:
+                output = self.yolo_session.run(None, {input_name: img})[0]
+        else:
+            output = self.yolo_session.run(None, {input_name: img})[0]
 
         # Post-process: transpose (1, 5, 8400) -> (8400, 5)
         output = output[0].transpose(1, 0)  # (8400, 5)
@@ -238,7 +255,11 @@ class UIParser:
         """OCR on compressed image. Boxes normalized to [0, 1000]."""
         t0 = time.time()
         h, w = resized.shape[:2]
-        result, _ = self.ocr(resized)
+        if self._inference_lock:
+            with self._inference_lock:
+                result, _ = self.ocr(resized)
+        else:
+            result, _ = self.ocr(resized)
         if not result:
             logger.info("OCR: %.0fms, 0 texts", (time.time() - t0) * 1000)
             return []
@@ -318,12 +339,16 @@ class UIParser:
         compressed, _ = self._compress(image)
         t1 = time.time()
 
-        # Parallel: OCR and YOLO are independent, both read-only on compressed
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            f_ocr = executor.submit(self._detect_text, compressed)
-            f_yolo = executor.submit(self._detect_icons, compressed)
-            ocr_results = f_ocr.result()
-            icon_results = f_yolo.result()
+        # DirectML is not thread-safe: run sequentially when DML is active
+        if self.use_dml:
+            ocr_results = self._detect_text(compressed)
+            icon_results = self._detect_icons(compressed)
+        else:
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                f_ocr = executor.submit(self._detect_text, compressed)
+                f_yolo = executor.submit(self._detect_icons, compressed)
+                ocr_results = f_ocr.result()
+                icon_results = f_yolo.result()
         t2 = time.time()
 
         merged = self._remove_overlap(icon_results, iou_threshold=0.7, ocr_boxes=ocr_results)

@@ -16,7 +16,7 @@ block_cipher = None
 SPEC_DIR = SPECPATH if isinstance(SPECPATH, str) else str(SPECPATH)
 ENIKK_PKG = os.path.join(SPEC_DIR, 'enikk')
 
-# ── onnxruntime: only the CAPI DLLs (avoid pulling torch/scipy/pyarrow) ─
+# ── onnxruntime-directml: only the CAPI DLLs (avoid pulling torch/scipy/pyarrow) ─
 ort_binaries = collect_dynamic_libs('onnxruntime')
 
 # ── rapidocr_onnxruntime: bundled model files ──────────────────────────
