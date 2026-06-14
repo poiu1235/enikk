@@ -160,6 +160,9 @@ hiddenimports = [
     'concurrent.futures',
     'shutil',
     'logging.handlers',
+
+    # ── tkinter (lazy-imported in WindowPickerOverlay) ────────────────
+    'tkinter',
 ]
 
 # Merge all collected hidden imports
@@ -185,7 +188,7 @@ a = Analysis(
         'onnxruntime.quantization', 'onnxruntime.transformers',
         'onnxruntime.tools', 'onnxruntime.datasets',
         # GUI / dev / test
-        'tkinter', 'matplotlib', 'pandas',
+        'matplotlib', 'pandas',
         'IPython', 'jupyter', 'notebook',
         'pytest', 'ruff', 'mypy',
     ],
